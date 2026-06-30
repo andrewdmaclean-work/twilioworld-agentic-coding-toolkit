@@ -1,0 +1,34 @@
+{
+  "name": "twilio-developer-kit",
+  "displayName": "Twilio Developer Kit",
+  "version": "0.2.0",
+  "description": "Twilio Skills and MCP provide procedural knowledge for AI coding agents — which APIs to use, in what order, and what to avoid. Covers Messaging, Voice, Verify, SendGrid, and 30+ products.",
+  "author": {
+    "name": "Twilio",
+    "url": "https://www.twilio.com"
+  },
+  "homepage": "https://www.twilio.com/docs",
+  "repository": "https://github.com/twilio/ai",
+  "license": "MIT",
+  "keywords": [
+    "twilio",
+    "sms",
+    "voice",
+    "whatsapp",
+    "rcs",
+    "messaging",
+    "verify",
+    "sendgrid",
+    "email",
+    "compliance",
+    "conversation-relay",
+    "conversation-memory",
+    "conversation-intelligence",
+    "conversation-orchestrator",
+    "agent-connect",
+    "enterprise-knowledge",
+    "api"
+  ],
+  "skills": ["./skills/twilio/", "./skills/sendgrid/"],
+  "logo": "./assets/logo.svg"
+}
