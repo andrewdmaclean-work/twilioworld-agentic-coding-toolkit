@@ -6,7 +6,7 @@ import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { capture, have, runStreaming, type LogFn } from "./exec.ts";
 import { addonEnabled } from "./config.ts";
-import { DOCS_MCP_URL, ROOT, TWILIO_MCP_PKG } from "./constants.ts";
+import { CONFIG_DIR, DOCS_MCP_URL, PI_AGENT_PKG, ROOT, TWILIO_MCP_PKG } from "./constants.ts";
 import { launchPi } from "./pi.ts";
 import { pathNodeVersion, supportsPiNode } from "./node-version.ts";
 
@@ -62,7 +62,7 @@ function configureOpencodeMcpSelection(onLog: LogFn) {
   say("   opencode.json is a tracked file — this toolkit never modifies it.", onLog);
   say("   Override at launch time instead:", onLog);
   say(`       export OPENCODE_CONFIG_CONTENT='${JSON.stringify(override)}'`, onLog);
-  say("   Persist it: echo 'export OPENCODE_CONFIG_CONTENT=...' >> .env && source .env", onLog);
+  say(`   Persist it: echo 'export OPENCODE_CONFIG_CONTENT=...' >> ${join(CONFIG_DIR, ".env")} && source ${join(CONFIG_DIR, ".env")}`, onLog);
 }
 
 export async function configureAgent(opts: {
@@ -87,7 +87,7 @@ export async function configureAgent(opts: {
       warn("Pi not found — installing…", onLog);
       let installed = false;
       if (have("npm")) {
-        const res = await runStreaming("npm", ["install", "-g", "--ignore-scripts", "@earendil-works/pi-coding-agent"], { cwd: ROOT, onLog });
+        const res = await runStreaming("npm", ["install", "-g", "--ignore-scripts", PI_AGENT_PKG], { cwd: ROOT, onLog });
         installed = res.ok;
         if (!installed) {
           warn("npm install failed — trying install script…", onLog);

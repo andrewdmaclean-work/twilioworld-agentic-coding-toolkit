@@ -82,6 +82,22 @@ function assertCompatibleNode(): void {
   }
 }
 
+// Security audit E-8/H-4: if the toolkit is ever run as root (sudo out of
+// habit, or a shared/CI box), downloaded models, .toolkit/config.json,
+// and the creds file would all end up root-owned — breaking every
+// subsequent normal-user run and leaving world-unreadable-by-you files
+// behind. No-op on Windows (no EUID concept, no getuid()).
+function assertNotRoot(): void {
+  if (process.env.TOOLKIT_TUI_SMOKE === "1") return;
+  if (process.platform === "win32") return;
+  if (typeof process.getuid !== "function") return;
+  if (process.getuid() === 0) {
+    console.error("TwilioWorld AI Toolkit should not be run as root.");
+    console.error("Re-run ./toolkit as your normal user — sudo here would root-own your model files and config.");
+    process.exit(2);
+  }
+}
+
 function clip(text: string, width: number): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
@@ -549,6 +565,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 async function main() {
   assertInteractiveTerminal();
   assertCompatibleNode();
+  assertNotRoot();
 
   if (process.env.TOOLKIT_TUI_SMOKE === "1") {
     const status = await readStatusAsync();

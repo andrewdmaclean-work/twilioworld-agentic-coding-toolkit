@@ -70,10 +70,10 @@ check "constants has GGUF URL"        grep -q 'kaggle' tui/src/lib/constants.ts
 check "setup checks prerequisites"   grep -q 'node.*git.*curl' tui/src/lib/setup.ts
 check "setup handles model download"  grep -q 'GGUF_STAGING' tui/src/lib/setup.ts
 check "setup has blast-radius warning" grep -q 'spend limit' tui/src/lib/setup.ts
-check "setup has secret warning"      grep -q 'SHOWN ONCE' tui/src/lib/setup.ts
+check "setup never prints secret to log" bash -c '! grep -q "SHOWN ONCE" tui/src/lib/setup.ts'
 check "setup has GGUF size check"     grep -q 'GGUF_MIN_BYTES' tui/src/lib/setup.ts
 check "setup handles Windows path"    grep -q 'llamafile.exe\|win32' tui/src/lib/constants.ts
-check "configure-agent has Pi case"   grep -q 'pi-coding-agent' tui/src/lib/configure-agent.ts
+check "configure-agent pins pi package" grep -q 'PI_AGENT_PKG' tui/src/lib/configure-agent.ts
 check "configure-agent has Pi MCP adapter" grep -q 'pi-mcp-adapter' tui/src/lib/pi.ts
 check "configure-agent has OpenCode"  grep -q 'anomalyco/tap/opencode' tui/src/lib/configure-agent.ts
 check "opencode.json never written by toolkit" bash -c '! grep -q "writeFileSync" tui/src/lib/configure-agent.ts'
@@ -114,6 +114,21 @@ check "no gum references remain"      bash -c '! grep -RIn "\bgum\b" README.md u
 check "no plain UI fallback remains"  bash -c '! grep -RIn "src/plain\|TOOLKIT_PLAIN\|--plain" toolkit tui/src tui/package.json 2>/dev/null'
 check "no legacy route purple remains" bash -c '! grep -RIn "C084FC\|3B2A52" tui/src 2>/dev/null'
 check "no legacy shell scripts remain" bash -c '! ls setup.sh configure-agent.sh start-model.sh toolkit.sh toolkit-tui.sh build-system-prompt.js 2>/dev/null | grep -q .'
+
+echo "── Security audit fixes ──"
+check "E-11 context window raised (model.ts)"      grep -q '"16384"' tui/src/lib/model.ts
+check "E-11 context window raised (pi models.json)" bash -c 'command -v jq && jq -e ".providers.llamafile.models[0].contextWindow == 16384" .pi/models.json || python3 -c "import json; d=json.load(open(\".pi/models.json\")); assert d[\"providers\"][\"llamafile\"][\"models\"][0][\"contextWindow\"] == 16384"'
+check "E-11 context window raised (opencode.json)"  bash -c 'command -v jq && jq -e ".provider.llamafile.models[\"gemma4-e2b\"].limit.context == 16384" opencode.json || python3 -c "import json; d=json.load(open(\"opencode.json\")); assert d[\"provider\"][\"llamafile\"][\"models\"][\"gemma4-e2b\"][\"limit\"][\"context\"] == 16384"'
+check "E-2/M-3 curl downloads resume + bound redirects" bash -c 'grep -q "curlDownloadArgs" tui/src/lib/setup.ts && grep -q "\-\-max-redirs" tui/src/lib/setup.ts && grep -q "\"-C\", \"-\"" tui/src/lib/setup.ts'
+check "E-8/H-4 root guard in index.ts" grep -q 'assertNotRoot' tui/src/index.ts
+check "E-8/H-4 root guard in toolkit entry" bash -c 'grep -q "EUID" toolkit && grep -q "should not be run as root" toolkit'
+check "C-1/H-3 magic-byte check before chmod +x" grep -q 'looksLikeExecutable' tui/src/lib/setup.ts
+check "C-2/H-1/H-2 creds written chmod 600, not printed" bash -c 'grep -q "writeMcpCredsFile" tui/src/lib/setup.ts && grep -q "0o600" tui/src/lib/setup.ts && ! grep -q "TWILIO_MCP_CREDS=\${mcpCreds}" tui/src/lib/setup.ts'
+check "C-3 extraction uses mkdtemp, not predictable path" bash -c 'grep -q "mkdtempSync" tui/src/lib/setup.ts && ! grep -q "extract_tmp" tui/src/lib/setup.ts'
+check "C-4 creds format validated"    grep -q 'looksLikeMcpCreds' tui/src/lib/setup.ts
+check "M-1 PORT/CTX_SIZE validated"   grep -q 'validDigits' tui/src/lib/model.ts
+check "M-2 umask set in setup"        grep -q 'process.umask' tui/src/lib/setup.ts
+check "L-1 pi package version pinned" grep -q 'PI_AGENT_PKG = "@earendil-works/pi-coding-agent@' tui/src/lib/constants.ts
 
 echo "── Pi config files ──"
 check "pi mcp.json valid JSON"        bash -c 'command -v jq && jq empty .pi/mcp.json || python3 -c "import json; json.load(open(\".pi/mcp.json\"))"'
