@@ -1,12 +1,16 @@
 // lib/setup.ts — setup workflow implementation (add-on picker is in the TUI).
 // Add-ons are already written to config.json before this is called.
 
-import { chmodSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from "fs";
+import {
+  chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync,
+  readSync, renameSync, rmSync, statSync, writeFileSync,
+} from "fs";
 import { homedir, platform } from "os";
 import { join } from "path";
 import { capture, fileExecutable, have, runStreaming, type LogFn } from "./exec.ts";
 import { addonEnabled } from "./config.ts";
 import {
+  CONFIG_DIR,
   DOCS_MCP_URL,
   GGUF_DEST,
   GGUF_MIN_BYTES,
@@ -28,6 +32,61 @@ function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
+
+// ── Security audit M-3/E-2: bound redirects and support resuming a
+// partial download instead of forcing a full re-download on a dropped
+// connection (common on shared/conference wifi with multi-GB payloads).
+function curlDownloadArgs(url: string, dest: string): string[] {
+  return ["-fL", "--max-redirs", "5", "-C", "-", "--progress-bar", url, "-o", dest];
+}
+
+// ── Security audit C-1/H-3: a network failure or captive-portal page can
+// leave HTML/garbage at the destination path instead of a real binary.
+// Check for a recognizable executable magic number before chmod +x runs.
+// llamafile ships as a cosmopolitan/APE binary, which — regardless of host
+// OS — always starts with the "MZ" bytes (it's simultaneously a valid PE
+// header, ELF loader stub, and shell script). This is a structural check,
+// not a substitute for pinning a hash; see LLAMAFILE_SHA256 below.
+function looksLikeExecutable(path: string): boolean {
+  try {
+    const fd = openSync(path, "r");
+    try {
+      const buf = Buffer.alloc(4);
+      const n = readSync(fd, buf, 0, 4, 0);
+      if (n < 2) return false;
+      // MZ (PE/APE — what llamafile actually ships), ELF, or Mach-O.
+      if (buf[0] === 0x4d && buf[1] === 0x5a) return true; // MZ
+      if (buf.equals(Buffer.from([0x7f, 0x45, 0x4c, 0x46]))) return true; // \x7fELF
+      const magic = buf.readUInt32BE(0);
+      if ([0xfeedface, 0xfeedfacf, 0xcefaedfe, 0xcffaedfe, 0xcafebabe].includes(magic)) return true; // Mach-O / FAT
+      return false;
+    } finally {
+      closeSync(fd);
+    }
+  } catch {
+    return false;
+  }
+}
+
+// ── Security audit C-4 (defense-in-depth): exec.ts's shCmd()/q() already
+// single-quote-escapes every arg before it reaches a shell, so this isn't
+// a command-injection gate — it just catches a malformed/truncated value
+// before it's written anywhere or handed to another tool.
+function looksLikeMcpCreds(creds: string): boolean {
+  return /^AC[a-f0-9]+\/SK[a-f0-9]+:.+$/.test(creds);
+}
+
+// ── Security audit C-2/H-1/H-2: never print the secret to the log pane
+// (it's a TUI transcript — easy to screenshot/share — and the old bash
+// version's `echo ... >> .zsh_history` advice put it in shell history
+// too). Write it to a local, gitignored, chmod-600 file instead.
+function writeMcpCredsFile(creds: string): string {
+  mkdirSync(CONFIG_DIR, { recursive: true });
+  const envFile = join(CONFIG_DIR, ".env");
+  writeFileSync(envFile, `export TWILIO_MCP_CREDS="${creds}"\n`, { mode: 0o600 });
+  chmodSync(envFile, 0o600); // belt-and-suspenders in case umask altered the create mode
+  return envFile;
+}
 
 // ── Model helpers ─────────────────────────────────────────────────────
 function ggufSizeOk(): boolean {
@@ -66,6 +125,13 @@ export async function runSetup(opts: {
   onDone: (ok: boolean) => void;
 }): Promise<void> {
   const { onLog, onDone } = opts;
+
+  // Security audit M-2: everything Setup creates from here on (.toolkit/,
+  // downloaded models/tools, the creds file) should default to
+  // owner-only permissions, not whatever broad umask the user's shell
+  // happened to have. process.umask() is process-global but Setup is a
+  // one-shot flow, so this is safe for the whole run.
+  process.umask(0o077);
 
   // ── Step 1: Prerequisites ──────────────────────────────────────────
   step("[1/7] Checking prerequisites", onLog);
@@ -154,12 +220,16 @@ export async function runSetup(opts: {
         const secret = entry?.secret ?? "";
         if (sid && secret) {
           mcpCreds = `${activeAccountSid}/${sid}:${secret}`;
-          ok(`API key created  (${sid})`, onLog);
-          say("", onLog);
-          warn("SECRET SHOWN ONCE ONLY — do not screenshot or share your screen right now.", onLog);
-          say(`   TWILIO_MCP_CREDS=${mcpCreds}`, onLog);
-          say("", onLog);
-          say("   Save it: echo 'export TWILIO_MCP_CREDS=\"" + mcpCreds + "\"' >> .env", onLog);
+          if (!looksLikeMcpCreds(mcpCreds)) {
+            warn("API returned a credential in an unexpected format — wire Execute MCP creds manually.", onLog);
+            mcpCreds = "";
+          } else {
+            ok(`API key created  (${sid})`, onLog);
+            const envFile = writeMcpCredsFile(mcpCreds);
+            say("", onLog);
+            ok(`Saved to ${envFile}  (chmod 600, gitignored — never printed to this log)`, onLog);
+            say(`   Load it in your shell:  source ${envFile}`, onLog);
+          }
         } else {
           warn("Couldn't parse key output — wire Execute MCP creds manually.", onLog);
         }
@@ -186,8 +256,11 @@ export async function runSetup(opts: {
       if (!runtimeOk()) {
         say(`   Downloading llamafile runtime…`, onLog);
         mkdirSync(TOOLS_DIR, { recursive: true });
-        const res = await runStreaming("curl", ["-fL", "--progress-bar", LLAMAFILE_URL, "-o", LLAMAFILE_DEST], { cwd: ROOT, onLog });
-        if (res.ok) {
+        const res = await runStreaming("curl", curlDownloadArgs(LLAMAFILE_URL, LLAMAFILE_DEST), { cwd: ROOT, onLog });
+        if (res.ok && !looksLikeExecutable(LLAMAFILE_DEST)) {
+          err("Downloaded file doesn't look like a real binary (captive portal page or corrupt transfer?) — removing it.", onLog);
+          rmSync(LLAMAFILE_DEST, { force: true });
+        } else if (res.ok) {
           chmodSync(LLAMAFILE_DEST, 0o755);
           ok("llamafile runtime ready", onLog);
         } else {
@@ -209,9 +282,9 @@ export async function runSetup(opts: {
         mkdirSync(MODELS_DIR, { recursive: true });
         if (!ggufStagingExists()) {
           say("   Downloading Gemma 4 E2B from Kaggle (~2.5GB)…", onLog);
-          const res = await runStreaming("curl", ["-fL", "--progress-bar", GGUF_URL, "-o", GGUF_STAGING], { cwd: ROOT, onLog });
+          const res = await runStreaming("curl", curlDownloadArgs(GGUF_URL, GGUF_STAGING), { cwd: ROOT, onLog });
           if (!res.ok) {
-            err("Download failed. Partial file kept at: " + GGUF_STAGING, onLog);
+            err("Download failed — partial file kept at " + GGUF_STAGING + " so re-running Setup can resume it.", onLog);
           }
         } else {
           const sz = statSync(GGUF_STAGING).size;
@@ -220,9 +293,13 @@ export async function runSetup(opts: {
 
         if (ggufStagingExists()) {
           say("   Extracting…", onLog);
-          const extractTmp = join(MODELS_DIR, "extract_tmp");
-          rmSync(extractTmp, { recursive: true, force: true });
-          mkdirSync(extractTmp, { recursive: true });
+          // Security audit C-3: the old predictable extraction path was
+          // removed with rm -rf then recreated with mkdir -p, leaving a
+          // gap an attacker on a shared/multi-user box could win by
+          // planting a symlink there first (TOCTOU). mkdtempSync asks the
+          // OS for an exclusively-created, unpredictable directory name
+          // instead — there's no gap to race.
+          const extractTmp = mkdtempSync(join(MODELS_DIR, "extract-"));
           const tarRes = await runStreaming("tar", ["-xf", GGUF_STAGING, "-C", extractTmp], { cwd: ROOT, onLog });
           if (!tarRes.ok) {
             err("Extraction failed", onLog);
@@ -318,6 +395,6 @@ export async function runSetup(opts: {
 
   say("", onLog);
   ok("Setup complete.", onLog);
-  if (mcpCreds) say(`   TWILIO_MCP_CREDS=${mcpCreds}`, onLog);
+  if (mcpCreds) say(`   Execute MCP creds: source ${join(CONFIG_DIR, ".env")}`, onLog);
   onDone(true);
 }

@@ -12,6 +12,21 @@ export const LLAMAFILE_VERSION = "0.10.3";
 export const TWILIO_MCP_PKG = "@twilio-alpha/mcp@0.6.0";
 export const DOCS_MCP_URL = "https://mcp.twilio.com/docs";
 
+// Security audit L-1: this was previously installed unversioned
+// (`npm install -g @earendil-works/pi-coding-agent`), exposing Setup to
+// unannounced upstream breaking changes or a compromised "latest" tag.
+// Pinned to a version confirmed to work with this toolkit's Pi wiring.
+export const PI_AGENT_PKG = "@earendil-works/pi-coding-agent@0.80.3";
+
+// llamafile ships as a cosmopolitan/APE binary; setup.ts checks the "MZ"
+// magic bytes structurally (see looksLikeExecutable) rather than trusting
+// the download blindly. TODO(security C-1): pin a real SHA-256 once one
+// is published/verified per platform for LLAMAFILE_VERSION, and check it
+// here before chmod +x — the magic-byte check alone catches corrupted/
+// captive-portal responses but not a byte-for-byte trojanized binary
+// with a still-valid APE header.
+export const LLAMAFILE_SHA256: string | null = null;
+
 // Official Google Gemma 4 E2B GGUF from Kaggle — no API key required.
 export const GGUF_URL =
   "https://www.kaggle.com/api/v1/models/google/gemma-4/gguf/gemma-4-e2b-it-qat-q4_0-gguf/2/download";

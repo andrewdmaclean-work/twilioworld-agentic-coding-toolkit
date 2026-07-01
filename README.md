@@ -176,7 +176,7 @@ or OpenCode Zen).
 To enable the Execute MCP:
 
 ```bash
-export TWILIO_MCP_CREDS="ACxxx/SKxxx:secret"   # printed during setup
+source .toolkit/.env   # created by Setup, chmod 600 — never printed to the log
 
 # If you enabled Execute MCP as an add-on, Configure agent will have printed
 # an override like this (opencode.json's committed default stays off):
@@ -271,9 +271,12 @@ The planned local flow follows Mozilla's whisperfile getting-started shape:
 Setup intentionally does not download whisperfile or the Whisper weights until the
 feature is ready end to end.
 
-**Memory footprint:** the model runs with a 4 096-token context window and a
-quantized KV cache (`q4_0`), keeping runtime RAM around **~1.5 GB**. That covers
-the full Twilio Skills system prompt plus several turns of conversation comfortably.
+**Memory footprint:** the model runs with a 16 384-token context window and a
+quantized KV cache (`q4_0`), keeping runtime RAM around **~2-2.5 GB**. That covers
+the full Twilio Skills system prompt plus several turns of conversation comfortably
+(a 4096-token window was tried first and reliably ran out of context within 2-3
+turns once Skills were loaded — a security/reliability audit flagged this before
+the event, see "Notes & caveats" below).
 Override the context window with `CTX_SIZE=<n>` if a task needs more room.
 
 It loads a Twilio system prompt built from the Skills index, so the local model
@@ -338,11 +341,21 @@ you run Setup with Execute MCP or Dev Phone selected.
 
 - **Execute MCP is experimental** (Twilio Alpha). Great for building, pre-GA.
 - **Dev Phone overwrites a number's webhooks** — never point it at a production number.
-- **`TWILIO_MCP_CREDS`** — persist across sessions by adding to a local `.env` file
-  (gitignored): `echo 'export TWILIO_MCP_CREDS="..."' >> .env && source .env`
+- **`TWILIO_MCP_CREDS`** — Setup writes it to `.toolkit/.env` (chmod 600, gitignored,
+  never printed to the log) instead of echoing it to stdout/shell history. Load it
+  with `source .toolkit/.env`.
 - Model weights plus local runtime binaries are git-ignored. Setup currently
   downloads Gemma/llamafile only; voice runtime paths are reserved for the
   coming-soon Whisper work.
+- **Don't run `./toolkit` as root/sudo.** It refuses to start as root (E-8/H-4)
+  so downloaded models and `.toolkit/config.json` never end up root-owned,
+  breaking subsequent normal-user runs.
+- **Downloaded binaries are structurally verified**, not just downloaded —
+  llamafile's magic bytes are checked before `chmod +x` runs, so a captive-portal
+  page or corrupted transfer gets rejected and deleted instead of executed
+  (C-1/H-3). A pinned SHA-256 check is a planned follow-up
+  (`LLAMAFILE_SHA256` in `tui/src/lib/constants.ts`) once a hash is verified
+  per platform for the pinned llamafile release.
 
 ---
 
