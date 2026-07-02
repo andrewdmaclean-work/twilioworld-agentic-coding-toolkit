@@ -1,5 +1,10 @@
 # TwilioWorld AI Toolkit
 
+> ⚠️ **Experimental — in active development.** This is a demo built for the
+> 2026 Twilio Assemble series, not a supported/production toolkit. Expect
+> rough edges, breaking changes without notice, and gaps between what's
+> documented here and what's implemented. Use it to explore, not to ship.
+
 Arm your AI coding agent with deep Twilio expertise — Skills, live Docs MCP, and
 optional real API execution — out of the box. Clone it, run one script, choose your
 add-ons, and your agent is ready to build and run real Twilio things with no hunting
