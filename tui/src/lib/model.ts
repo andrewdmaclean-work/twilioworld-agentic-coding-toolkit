@@ -16,14 +16,16 @@ import { fileExecutable } from "./exec.ts";
 
 // Security audit E-11: 4096 was too small — the 56-skill system prompt plus
 // tool-call scaffolding filled it within 2-3 turns ("ran out of context
-// window"). 16384 gives real headroom; override with CTX_SIZE if needed.
+// window"). 16384 gave real headroom, and was later doubled to 32768 for
+// longer multi-tool sessions (more Skills lookups, longer tool results)
+// without running out mid-conversation. Override with CTX_SIZE if needed.
 // Validated to digits only — a malformed value falls back to the default
 // instead of being passed through to the llamafile arg list unchecked.
 function validDigits(raw: string | undefined, fallback: string): string {
   return raw && /^[0-9]+$/.test(raw) ? raw : fallback;
 }
 
-const CTX_SIZE = validDigits(process.env.CTX_SIZE, "16384");
+const CTX_SIZE = validDigits(process.env.CTX_SIZE, "32768");
 const PORT = validDigits(process.env.PORT, "8080");
 
 export { LLAMAFILE_DEST };

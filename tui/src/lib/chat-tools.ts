@@ -18,7 +18,7 @@ export const CHAT_TOOLS = [
     type: "function",
     function: {
       name: "get_toolkit_status",
-      description: "Return current TwilioWorld toolkit readiness, local model, Pi, Node, Twilio CLI, and selected add-on status.",
+      description: "Return current TwilioWorld toolkit status, local model, Pi, Node, Twilio CLI, and selected add-on status.",
       parameters: {
         type: "object",
         properties: {},
@@ -30,7 +30,7 @@ export const CHAT_TOOLS = [
     type: "function",
     function: {
       name: "get_addon_config",
-      description: "Return the selected TwilioWorld add-ons from .toolkit/config.json or defaults.",
+      description: "Return the selected TwilioWorld install choices from .toolkit/config.json or defaults.",
       parameters: {
         type: "object",
         properties: {},
@@ -42,7 +42,7 @@ export const CHAT_TOOLS = [
     type: "function",
     function: {
       name: "list_twilio_skills",
-      description: "List all available Twilio Skill files currently vendored into the toolkit.",
+      description: "List all available Twilio Skill files currently included in the toolkit.",
       parameters: {
         type: "object",
         properties: {
@@ -59,7 +59,7 @@ export const CHAT_TOOLS = [
     type: "function",
     function: {
       name: "search_twilio_skills",
-      description: "Search every vendored Twilio Skill by path and markdown content. Use this before answering Twilio questions from local Skills.",
+      description: "Search every local Twilio Skill by path and markdown content. Use this before answering Twilio questions from local Skills.",
       parameters: {
         type: "object",
         properties: {
@@ -81,7 +81,7 @@ export const CHAT_TOOLS = [
     type: "function",
     function: {
       name: "read_twilio_skill",
-      description: "Read a vendored Twilio Skill markdown file by path. Use after list_twilio_skills or search_twilio_skills.",
+      description: "Read a local Twilio Skill markdown file by path. Use after list_twilio_skills or search_twilio_skills.",
       parameters: {
         type: "object",
         properties: {

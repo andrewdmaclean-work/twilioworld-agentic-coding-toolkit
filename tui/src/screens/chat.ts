@@ -41,6 +41,20 @@ export function isVoiceShortcut(key: { ctrl: boolean; name: string }): boolean {
   return key.ctrl && key.name === "r";
 }
 
+// The text input keeps keyboard focus permanently in this screen (there's no
+// separate "focus the transcript to scroll" mode), so these navigation keys
+// are intercepted here and forwarded to the transcript's own ScrollBox key
+// handling instead of being typed into the input. PageUp/PageDown/Home/End
+// always scroll the transcript — an empty single-line input has no use for
+// them. Up/Down only scroll when the input is empty, so they don't fight
+// with any future in-input cursor/history behavior while you're typing.
+const SCROLL_KEYS_ALWAYS = new Set(["pageup", "pagedown", "home", "end"]);
+const SCROLL_KEYS_WHEN_EMPTY = new Set(["up", "down"]);
+
+export function isTranscriptScrollKey(key: { name: string }, inputEmpty: boolean): boolean {
+  return SCROLL_KEYS_ALWAYS.has(key.name) || (inputEmpty && SCROLL_KEYS_WHEN_EMPTY.has(key.name));
+}
+
 function wrap(text: string, width: number): string {
   if (width <= 0) return text;
   const lines: string[] = [];
@@ -125,7 +139,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     title: "Local model chat",
     subtitle: "OpenTUI chat against the local OpenAI-compatible server.",
     bodyTitle: "Conversation",
-    footer: "  Enter send    Ctrl+R voice soon    Escape dashboard",
+    footer: "  Enter send    PageUp/PageDown scroll    Escape dashboard",
   });
 
   const transcript = new ScrollBoxRenderable(renderer, {
@@ -167,8 +181,8 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
         "You are a concise TwilioWorld AI Toolkit assistant.",
         "Do not expose chain-of-thought, hidden reasoning, <think> blocks, or internal deliberation.",
         "Answer in plain text only. Do not use Markdown syntax, headings, bullets, tables, code fences, inline code ticks, bold, or italics.",
-        "You have tool calling. For Twilio-specific answers, call search_twilio_skills first. If Skills are missing or not enough, call search_twilio_docs_mcp. If the user explicitly asks for MCP, call search_twilio_docs_mcp.",
-        "Use toolkit status/config tools when the user asks about local readiness, selected add-ons, or installed components.",
+        "You have tool calling. Local chat always has Twilio Skills and Docs MCP available. For Twilio-specific answers, call search_twilio_skills first. If Skills are missing or not enough, call search_twilio_docs_mcp. If the user explicitly asks for MCP, call search_twilio_docs_mcp.",
+        "Use toolkit status/config tools when the user asks about local status, install choices, or installed components.",
         "After a tool call, summarize the result plainly and briefly.",
       ].join(" "),
     },
@@ -204,7 +218,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     startDaemon(LLAMAFILE_DEST, serverArgs(), { cwd: ROOT });
     serverReady = await waitForServer();
     footer.content = serverReady
-      ? "  Enter send    Escape dashboard    Server :8080 ready"
+      ? "  Enter send    PageUp/PageDown scroll    Server :8080 ready"
       : "  Model server did not respond yet. Try again in a moment.";
     footer.fg = serverReady ? THEME.dim : THEME.yellow;
     return serverReady;
@@ -272,7 +286,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       if (!reply) reply = "I called tools, but the local model did not produce a final answer.";
       addLine("Gemma:", reply, THEME.silver);
       history.push({ role: "assistant", content: reply });
-      footer.content = "  Enter send    Escape dashboard";
+      footer.content = "  Enter send    PageUp/PageDown scroll    Escape dashboard";
       footer.fg = THEME.dim;
     } catch (e) {
       addLine("Gemma:", (e as Error).message, THEME.yellow);
@@ -294,7 +308,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       const started = startVoiceRecording();
       if (!started.ok) {
         addLine("Voice:", started.error, THEME.yellow);
-        footer.content = "  Ctrl+R is wired. Voice input is coming soon.";
+        footer.content = "  Voice input is not available yet.";
         footer.fg = THEME.yellow;
         input.focus();
         return;
@@ -317,7 +331,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       cleanupVoiceRecording(session);
       if (!text) {
         addLine("Voice:", "No speech detected.", THEME.yellow);
-        footer.content = "  Enter send    Ctrl+R voice soon    Escape dashboard";
+        footer.content = "  Enter send    PageUp/PageDown scroll    Escape dashboard";
         footer.fg = THEME.dim;
         return;
       }
@@ -350,10 +364,15 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
         void stopVoiceRecording(session).then(() => cleanupVoiceRecording(session));
       }
       onCancel();
+      return;
+    }
+    if (isTranscriptScrollKey(key, input.value.length === 0) && transcript.handleKeyPress(key)) {
+      key.preventDefault();
+      key.stopPropagation();
     }
   };
 
-  addLine("System:", "Local chat stays inside OpenTUI. The server starts in the background if needed. Ctrl+R voice input is wired and coming soon.", THEME.dim2);
+  addLine("System:", "Local chat stays inside OpenTUI. The server starts in the background if needed.", THEME.dim2);
   void ensureServer();
   input.focus();
   return screen;

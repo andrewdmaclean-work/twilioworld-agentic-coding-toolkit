@@ -3,21 +3,31 @@
 // Phase 2: log screen streaming runSetup() output in-TUI.
 
 import { type CliRenderer, BoxRenderable, SelectRenderable, SelectRenderableEvents, TextRenderable } from "@opentui/core";
-import { CheckList } from "../checklist.ts";
+import { CheckList, type CheckItem } from "../checklist.ts";
 import { writeConfig, readConfig, type AddonKey } from "../lib/config.ts";
 import { runSetup } from "../lib/setup.ts";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { buildLogScreen } from "./log.ts";
 
-const ADDON_ITEMS = [
-  { key: "twilioSkills" as AddonKey, label: "Twilio Skills",      description: "Loads 56+ skills into your agent" },
-  { key: "docsMcp"      as AddonKey, label: "Docs MCP",           description: "Live Twilio API search (1,800+ endpoints)" },
-  { key: "executeMcp"   as AddonKey, label: "Execute MCP",        description: "Agent can call real Twilio APIs — experimental" },
-  { key: "devPhone"     as AddonKey, label: "Dev Phone",          description: "Browser soft phone for SMS + voice" },
-  { key: "localGemma"   as AddonKey, label: "Local Gemma model",  description: "Free offline model — powers in-app chat + Pi (~2.5 GB)" },
-  { key: "voiceInput"   as AddonKey, label: "Voice input",        description: "Ctrl+R chat shortcut wired; local Whisper support coming soon" },
+type SetupItem = CheckItem & { key: AddonKey | `__${string}` };
+
+const ADDON_ITEMS: SetupItem[] = [
+  { key: "__local", label: "Local chat", description: "Installs the model used by Chat with Twilio.", heading: true },
+  { key: "localGemma"   as AddonKey, label: "Local model for Chat with Twilio",  description: "Required for in-app local chat and Pi (~2.5 GB)" },
+  { key: "__agents", label: "Coding agents", description: "Applied when you choose Configure agent.", heading: true },
+  { key: "twilioSkills" as AddonKey, label: "Install Twilio Skills for agents",      description: "Make Twilio Skills available to coding agents" },
+  { key: "docsMcp"      as AddonKey, label: "Add Docs MCP to agents",           description: "Give coding agents live Twilio API search" },
+  { key: "executeMcp"   as AddonKey, label: "Add Execute MCP to agents",        description: "Let agents call real Twilio APIs — experimental" },
+  { key: "__tools", label: "Twilio tools", description: "Optional local tools.", heading: true },
+  { key: "devPhone"     as AddonKey, label: "Install Dev Phone",          description: "Browser soft phone for SMS + voice" },
 ];
+
+function isConfigItem(item: SetupItem): item is SetupItem & { key: AddonKey } {
+  return !item.heading;
+}
+
+const CONFIG_ITEMS = ADDON_ITEMS.filter(isConfigItem);
 
 export function buildSetupScreen(
   renderer: CliRenderer,
@@ -26,23 +36,23 @@ export function buildSetupScreen(
 ): BoxRenderable {
   const current = readConfig();
   const initialChecked = new Set<number>(
-    ADDON_ITEMS.map((item, i) => (current.addons[item.key] ? i : -1)).filter((i) => i >= 0),
+    ADDON_ITEMS.map((item, i) => (isConfigItem(item) && current.addons[item.key] ? i : -1)).filter((i) => i >= 0),
   );
 
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "setup-screen",
     route: "Dashboard / Setup",
-    title: "Choose add-ons",
-    subtitle: "Space toggles add-ons. Enter saves. Escape returns to dashboard.",
-    bodyTitle: "Add-ons",
-    footer: "  Escape dashboard    Space toggle add-on    Enter save",
+    title: "Choose what to install",
+    subtitle: "Space toggles install choices. Enter saves. Escape returns to dashboard.",
+    bodyTitle: "Install Choices",
+    footer: "  Escape dashboard    Space toggle choice    Enter save",
   });
 
   const checklist = new CheckList(renderer, "addon-pick", ADDON_ITEMS, initialChecked);
   body.add(checklist.container);
 
   // Confirm panel (shown after checklist confirm)
-  const confirmLabel = new TextRenderable(renderer, { id: "confirm-label", content: "Add-ons saved. Run installs now?", fg: THEME.green, visible: false });
+  const confirmLabel = new TextRenderable(renderer, { id: "confirm-label", content: "Choices saved. Run installs now?", fg: THEME.green, visible: false });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "confirm-select", height: 4, flexGrow: 1, flexShrink: 0, visible: false,
     options: [
@@ -74,12 +84,19 @@ export function buildSetupScreen(
       onFinished();
     }
   });
-  confirmSelect.onKeyDown = (key) => { if (key.name === "escape") onCancel(); };
+  confirmSelect.onKeyDown = (key) => {
+    if (key.name === "escape" || key.name === "q") {
+      key.preventDefault();
+      key.stopPropagation();
+      onCancel();
+    }
+  };
   body.add(confirmLabel);
   body.add(confirmSelect);
 
   checklist.onConfirm = (checkedKeys) => {
-    const addons = Object.fromEntries(ADDON_ITEMS.map((item) => [item.key, checkedKeys.includes(item.key)])) as Record<AddonKey, boolean>;
+    const addons = { ...current.addons, voiceInput: false } as Record<AddonKey, boolean>;
+    for (const item of CONFIG_ITEMS) addons[item.key] = checkedKeys.includes(item.key);
     writeConfig(addons);
     checklist.container.visible = false;
     confirmLabel.visible = true;

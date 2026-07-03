@@ -25,6 +25,7 @@ export interface CheckItem {
   key: string;
   label: string;
   description: string;
+  heading?: boolean;
 }
 
 const CHECK = "[x]";
@@ -81,7 +82,9 @@ export class CheckList {
     this._select.onKeyDown = (key: KeyEvent) => {
       if (key.name === "space") {
         const i = this._select.getSelectedIndex();
-        if (this._checked.has(i)) {
+        if (this.items[i]?.heading) {
+          // Section headings are navigable context, not selectable choices.
+        } else if (this._checked.has(i)) {
           this._checked.delete(i);
         } else {
           this._checked.add(i);
@@ -89,7 +92,9 @@ export class CheckList {
         this._refresh();
         key.preventDefault();
         key.stopPropagation();
-      } else if (key.name === "escape") {
+      } else if (key.name === "escape" || key.name === "q") {
+        key.preventDefault();
+        key.stopPropagation();
         this.onCancel?.();
       }
     };
@@ -120,12 +125,14 @@ export class CheckList {
   }
 
   getCheckedKeys(): string[] {
-    return this.items.filter((_, i) => this._checked.has(i)).map((item) => item.key);
+    return this.items
+      .filter((item, i) => !item.heading && this._checked.has(i))
+      .map((item) => item.key);
   }
 
   private _buildOptions() {
     return this.items.map((item, i) => ({
-      name: `${this._checked.has(i) ? CHECK : UNCHECK}  ${item.label}`,
+      name: item.heading ? item.label : `${this._checked.has(i) ? CHECK : UNCHECK}  ${item.label}`,
       description: item.description,
       value: item.key,
     }));
