@@ -1,5 +1,5 @@
 // lib/setup.ts — setup workflow implementation (add-on picker is in the TUI).
-// Add-ons are already written to config.json before this is called.
+// Install choices are already written to config.json before this is called.
 
 import {
   chmodSync, closeSync, existsSync, mkdirSync, mkdtempSync, openSync, readdirSync,
@@ -25,7 +25,6 @@ import {
   TWILIO_MCP_PKG,
   GGUF_URL,
 } from "./constants.ts";
-import { VOICE_COMING_SOON_MESSAGE } from "./voice.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
 function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
@@ -134,7 +133,7 @@ export async function runSetup(opts: {
   process.umask(0o077);
 
   // ── Step 1: Prerequisites ──────────────────────────────────────────
-  step("[1/7] Checking prerequisites", onLog);
+  step("[1/6] Checking prerequisites", onLog);
   let missing = false;
   for (const tool of ["node", "git", "curl"]) {
     if (have(tool)) {
@@ -148,7 +147,7 @@ export async function runSetup(opts: {
   if (missing) { onDone(false); return; }
 
   // ── Step 2: Twilio CLI ─────────────────────────────────────────────
-  step("[2/7] Twilio CLI", onLog);
+  step("[2/6] Twilio CLI", onLog);
   if (have("twilio")) {
     ok(`twilio CLI  ${capture("twilio", ["--version"]).split("\n")[0]}`, onLog);
   } else if (addonEnabled("executeMcp") || addonEnabled("devPhone")) {
@@ -157,7 +156,7 @@ export async function runSetup(opts: {
     if (!res.ok) { err("twilio-cli install failed — see https://www.twilio.com/docs/twilio-cli/quickstart", onLog); onDone(false); return; }
     ok("Twilio CLI installed", onLog);
   } else {
-    warn("Twilio CLI not installed — not needed for your selected add-ons", onLog);
+    warn("Twilio CLI not installed — not needed for your selected choices", onLog);
   }
 
   // ── Twilio account (optional — only needed for Execute MCP) ────────
@@ -190,7 +189,7 @@ export async function runSetup(opts: {
   }
 
   // ── Step 3: API key for Execute MCP ───────────────────────────────
-  step("[3/7] Execute MCP API key (optional)", onLog);
+  step("[3/6] Execute MCP API key (optional)", onLog);
   let mcpCreds = "";
   if (!addonEnabled("executeMcp")) {
     warn("Execute MCP not selected — skipping", onLog);
@@ -240,7 +239,7 @@ export async function runSetup(opts: {
   }
 
   // ── Step 4: Local model ────────────────────────────────────────────
-  step("[4/7] Local AI model — Gemma 4 E2B via llamafile", onLog);
+  step("[4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
   if (!addonEnabled("localGemma")) {
     warn("Local Gemma not selected — skipping", onLog);
   } else if (runtimeOk() && ggufSizeOk()) {
@@ -329,23 +328,8 @@ export async function runSetup(opts: {
     }
   }
 
-  // ── Step 5: Voice input ────────────────────────────────────────────
-  step("[5/7] Voice input — coming soon", onLog);
-  if (!addonEnabled("voiceInput")) {
-    warn("Voice input not selected — skipping", onLog);
-  } else {
-    warn(VOICE_COMING_SOON_MESSAGE, onLog);
-    say("   Planned runtime: tools/whisperfile", onLog);
-    say("   Planned model:   models/whisper-tiny.en-q5_1.bin", onLog);
-    say("   Planned command: whisperfile -m models/whisper-tiny.en-q5_1.bin -f <audio> --no-prints", onLog);
-    if (have("rec")) ok("Future microphone recorder detected (rec)", onLog);
-    else if (have("ffmpeg")) ok("Future microphone recorder detected (ffmpeg)", onLog);
-    else if (have("arecord")) ok("Future microphone recorder detected (arecord)", onLog);
-    else warn("No recorder found yet. Future voice input will need sox/rec, ffmpeg, or arecord.", onLog);
-  }
-
-  // ── Step 6: Dev Phone ──────────────────────────────────────────────
-  step("[6/7] Dev Phone", onLog);
+  // ── Step 5: Dev Phone ──────────────────────────────────────────────
+  step("[5/6] Dev Phone", onLog);
   if (!addonEnabled("devPhone")) {
     warn("Dev Phone not selected — skipping", onLog);
   } else if (!have("twilio")) {
@@ -362,8 +346,8 @@ export async function runSetup(opts: {
     warn("Dev Phone OVERWRITES a number's webhooks — use a spare number, not production.", onLog);
   }
 
-  // ── Step 7: Skills ─────────────────────────────────────────────────
-  step("[7/7] Twilio Skills", onLog);
+  // ── Step 6: Skills ─────────────────────────────────────────────────
+  step("[6/6] Twilio Skills", onLog);
   const skillsReadme = join(ROOT, "vendor", "twilio-ai", "skills", "README.md");
   if (!existsSync(skillsReadme)) {
     say("   Pulling skills (git submodule)…", onLog);

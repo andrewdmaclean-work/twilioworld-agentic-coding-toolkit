@@ -12,12 +12,12 @@ import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { buildLogScreen } from "./log.ts";
 
 const AGENT_OPTIONS = [
-  { name: "Claude Code",           description: "Anthropic's CLI agent",                        value: "Claude Code" },
-  { name: "Codex",                 description: "OpenAI's CLI agent",                            value: "Codex" },
-  { name: "Cursor",                description: "AI-powered code editor",                        value: "Cursor" },
-  { name: "OpenCode",              description: "Open-source coding agent",                      value: "OpenCode" },
-  { name: "Pi",                    description: "Local agent — toolkit installs + runs it for you", value: "Pi (lightweight TUI)" },
-  { name: "Other / Bring my own",  description: "Manual MCP wiring instructions",                value: "Other / Bring my own" },
+  { name: "Claude Code",           description: "Anthropic's CLI agent — toolkit installs + launches it for you", value: "Claude Code" },
+  { name: "Codex",                 description: "OpenAI's CLI agent — toolkit installs + launches it for you",   value: "Codex" },
+  { name: "Cursor",                description: "Cursor's CLI agent — toolkit installs + launches it for you",   value: "Cursor" },
+  { name: "OpenCode",              description: "Open-source coding agent — toolkit installs it for you",        value: "OpenCode" },
+  { name: "Pi",                    description: "Local agent — toolkit installs + runs it for you",               value: "Pi (lightweight TUI)" },
+  { name: "Other / Bring my own",  description: "Manual MCP wiring instructions",                                 value: "Other / Bring my own" },
 ];
 
 export function buildAgentScreen(
@@ -61,7 +61,13 @@ export function buildAgentScreen(
     removeAllChildren(screen);
     screen.add(logScreen);
   });
-  select.onKeyDown = (key) => { if (key.name === "escape") onCancel(); };
+  select.onKeyDown = (key) => {
+    if (key.name === "escape" || key.name === "q") {
+      key.preventDefault();
+      key.stopPropagation();
+      onCancel();
+    }
+  };
 
   body.add(select);
   select.focus();

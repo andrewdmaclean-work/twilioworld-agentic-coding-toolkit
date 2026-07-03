@@ -6,14 +6,18 @@
 > documented here and what's implemented. Use it to explore, not to ship.
 
 Arm your AI coding agent with deep Twilio expertise — Skills, live Docs MCP, and
-optional real API execution — out of the box. Clone it, run one script, choose your
-add-ons, and your agent is ready to build and run real Twilio things with no hunting
+optional real API execution — out of the box. Clone it, run one script, choose what
+to install or wire into your agent, and your agent is ready to build and run real Twilio things with no hunting
 through docs and no copying configs.
 
 **Chat with the local model right inside the TUI** — no external agent required.
 Or configure any coding agent — Pi, OpenCode, Claude Code, Cursor, Codex, or your
 own — and the toolkit wires up the same Skills/Docs MCP/Execute MCP knowledge layer
 for it. No agent gets special treatment: pick whichever fits, from one menu.
+
+Twilio Skills and Twilio MCP are Public Beta Twilio surfaces. The toolkit treats
+them as install choices: Twilio Skills and the read-only Docs MCP are enabled for agent setup by default,
+while the execute-capable MCP stays off until you explicitly select it.
 
 ---
 
@@ -35,28 +39,25 @@ cd twilioworld-ai-toolkit
 ║  TwilioWorld AI Toolkit          ║
 ╚══════════════════════════════════╝
 
-  ✓  Twilio CLI    primary (…e4c7)
-  ✓  Skills        56 loaded
-  ✗  Model file    not downloaded
-  ✓  Runtime       llamafile ready
-  ✓  Node          v22.19.0
-  ✓  Dev Phone     installed
+  Install choices  Local chat model, Agent Skills, Agent Docs MCP
+
+  Active
+    ·  No running toolkit services.
 
   What do you want to do?
-  ▶ Setup — configure this machine
-    Configure AI agent (Pi, OpenCode, Claude Code, Cursor, Codex…)
-    Chat with local model        (in-app + API on :8080)
-    Local model server only      (for tools / background)
-    Dev Phone — browser soft phone (new terminal window)
+  ▶ Setup
+    Configure agent
+    Sign up for TwilioWorld
+    Uninstall
     Exit
 ```
 
-Setup asks which add-ons you want once, then Configure agent uses those choices
+Setup asks what to install or wire once, then Configure agent uses those choices
 silently. The fastest path to a working agent is:
 
-1. Run `./toolkit` → **Setup** → select your add-ons (Gemma is on by default —
+1. Run `./toolkit` → **Setup** → choose what to install (Gemma is on by default —
    it powers in-app chat and, if you pick Pi, Pi too)
-2. Back at the menu → **Chat with local model** for instant Q&A, or **Configure
+2. Back at the menu → **Chat with Twilio** for instant Q&A, or **Configure
    agent** → pick any agent (Pi included) to wire it up
 
 Setup, agent configuration, local chat, and model server control all run inside the
@@ -69,7 +70,7 @@ the toolkit can fully install and launch for you (it needs a model to talk to an
 process to start); the others are external tools you already have, so Configure
 agent prints the exact MCP-wiring command for those instead.
 
-Your add-on choices live in `.toolkit/config.json` and are local to your machine.
+Your install choices live in `.toolkit/config.json` and are local to your machine.
 If that file is removed or you reset local state, the toolkit falls back to tracked
 defaults in `toolkit.defaults.json` — local Gemma (for in-app chat) stays on. The
 local model is also detected from the actual `models/gemma4-e2b.gguf` and
@@ -86,41 +87,40 @@ disappear from the menu.
 | **Docs MCP** | Your agent searches the live Twilio API surface (1,800+ endpoints) and pulls exact schemas. No auth. |
 | **Execute MCP** *(experimental)* | Your agent **calls real Twilio APIs** — "send a text to my phone" just works. Uses a scoped API key. |
 | **Gemma 4 E2B (local)** | A free, offline model via [llamafile](https://github.com/mozilla-ai/llamafile). Serves an OpenAI-compatible API on `:8080` — powers in-app chat and, if selected, Pi. |
-| **Voice input** *(coming soon)* | `Ctrl+R` is wired inside Chat and reports the planned local speech-to-text flow. Whisper model installation is not enabled yet. |
 | **Twilio CLI** | The command line to all things Twilio, logged in and ready. |
 | **Dev Phone** | A browser soft phone — make/receive real SMS + voice with no physical device. |
 | **Pi** *(one of several agent options)* | [Pi](https://pi.dev) is the one agent the toolkit can fully install, wire, and launch for you — Configure agent → Pi does everything in one step. |
 
-### Add-ons
+### Install choices
 
-The base toolkit gives you the menu and repo-local assets. Add-ons decide what gets
-installed and silently attached when you configure an agent:
+The base toolkit gives you the menu and repo-local assets. Setup choices decide what gets
+installed locally and what gets attached when you configure an agent:
 
-| Add-on | What it unlocks | Default |
+| Choice | What it does | Default |
 | --- | --- | --- |
-| Local Gemma model | Powers in-app chat; also serves `http://127.0.0.1:8080/v1` for other tools (including Pi) | ✓ on |
-| Voice input | Keeps the `Ctrl+R` voice entry point visible in Chat while local Whisper support is completed | ✓ on |
-| Twilio Skills | Agent Twilio knowledge — 48+ procedural skill files | ✓ on |
-| Docs MCP | Searchable live Twilio API reference (no auth) | ✓ on |
-| Execute MCP | Real Twilio API calls from the agent | off |
+| Local Gemma model | Required for Chat with Twilio; also serves `http://127.0.0.1:8080/v1` for other tools (including Pi) | ✓ on |
+| Twilio Skills for agents | Installs Twilio Skills where coding agents can find them | ✓ on |
+| Docs MCP for agents | Adds searchable live Twilio API reference to configured agents | ✓ on |
+| Execute MCP for agents | Lets configured agents call real Twilio APIs | off |
 | Dev Phone | Browser SMS/voice test phone | off |
 
-There's no "which agent do I use" add-on — that's not a machine-wide setting, it's
-a choice you make each time you open Configure agent. Skills and MCP add-ons attach
-to whichever agent you configure, if you selected them.
+There's no "which agent do I use" setup choice — that's not a machine-wide setting,
+it's a choice you make each time you open Configure agent. Skills and MCP choices
+attach to whichever agent you configure, if you selected them.
+
+Use Skills and Docs MCP together: Skills guide product choice, architecture, and
+pitfalls; Docs MCP retrieves current endpoint schemas and documentation details.
 
 ---
 
 ## Prerequisites
 
 - **Node.js**, **git**, **curl** (the script checks these)
-- A **Twilio account** (only needed for Execute MCP and Dev Phone add-ons)
+- A **Twilio account** (only needed for Execute MCP and Dev Phone)
 - ~2.5 GB free disk if you want the local Gemma model
-- `rec` from SoX, `ffmpeg`, or `arecord` will be needed for the coming-soon microphone voice input
 
 The toolkit can install the Twilio CLI, Dev Phone plugin, Pi, OpenCode, llamafile
-runtime, and local Gemma model files when those add-ons are selected. Voice input
-does not download whisperfile or Whisper weights yet.
+runtime, and local Gemma model files when those choices are selected.
 
 ---
 
@@ -130,9 +130,8 @@ does not download whisperfile or Whisper weights yet.
 2. **Twilio CLI** — installs if needed for Execute MCP or Dev Phone, then checks for an active login.
 3. **API key** — mints a scoped key via `twilio api:core:keys:create` for the Execute MCP, so your root Auth Token never lands in a config string.
 4. **Local model** — downloads the llamafile runtime + Gemma 4 E2B weights only if selected.
-5. **Voice input** — marks the OpenTUI `Ctrl+R` entry point as coming soon and checks future recorder availability.
-6. **Dev Phone** — installs the plugin only if selected.
-7. **Skills** — initializes the submodule and installs skills globally if the add-on is enabled.
+5. **Dev Phone** — installs the plugin only if selected.
+6. **Skills** — initializes the submodule and installs skills globally if the agent Skills choice is enabled.
 
 Then it verifies your credentials with a real API call and prints a cheat sheet.
 
@@ -141,26 +140,72 @@ Then it verifies your credentials with a real API call and prints a cheat sheet.
 ## Per-agent setup
 
 The toolkit uses each agent's **native** install path — nothing proprietary. All
-five are configured the same way: `./toolkit` → **Configure agent** → pick one.
+six are configured the same way: `./toolkit` → **Configure agent** → pick one.
+For Claude Code, Codex, Cursor, OpenCode, and Pi, that single step **installs the
+agent if it's missing, wires your selected Skills/MCP choices, and launches the
+agent in a brand-new terminal window** — the dashboard keeps running in this one,
+so you land somewhere you can actually start working, not just a wall of text.
 
 ### Claude Code
+
+```bash
+./toolkit
+# choose: Configure agent → Claude Code
+```
+
+That step:
+- installs Claude Code if it isn't on PATH yet (Homebrew cask → npm → the official
+  install script, in that order)
+- adds the `twilio-developer-kit` plugin marketplace + plugin if Skills are enabled
+- adds the Docs MCP and/or Execute MCP if those choices are enabled
+- opens `claude` in a brand-new terminal window — sign in there on first run
+
+**Manual equivalent**, if you'd rather do it yourself:
 ```text
-/plugin marketplace add twilio/ai
-/plugin install twilio-developer-kit@twilio
+brew install --cask claude-code        # or: npm install -g @anthropic-ai/claude-code
+claude plugin marketplace add https://github.com/twilio/ai
+claude plugin install twilio-developer-kit@twilio
 claude mcp add twilio-docs --transport http https://mcp.twilio.com/docs
 ```
 
 ### Codex
-Open **Plugins**, install "Twilio developer kit", then:
+
 ```bash
+./toolkit
+# choose: Configure agent → Codex
+```
+
+That step:
+- installs Codex if it isn't on PATH yet (Homebrew → npm → the official install
+  script, in that order)
+- adds the Docs MCP and/or Execute MCP if those choices are enabled (Codex's
+  plugin marketplaces aren't auto-wired yet — see the manual step below)
+- opens `codex` in a brand-new terminal window — sign in there on first run
+
+**Manual equivalent:**
+```bash
+brew install codex                     # or: npm install -g @openai/codex
 codex mcp add twilio-docs --url https://mcp.twilio.com/docs
+# Plugins: open Codex → /plugins → install "Twilio developer kit"
 ```
 
 ### Cursor
-```text
-/add-plugin twilio-developer-kit
+
+```bash
+./toolkit
+# choose: Configure agent → Cursor
 ```
-Add the Execute MCP under **Cursor Settings > MCP**.
+
+That step installs the [Cursor CLI](https://cursor.com/docs/cli) (`cursor-agent`)
+if it isn't on PATH yet (Homebrew cask → the official install script), then opens
+it in a brand-new terminal window. MCP and plugin wiring for Cursor isn't
+CLI-scriptable yet, so Configure agent prints the manual steps:
+
+```text
+In Cursor Composer or the CLI:  /add-plugin twilio-developer-kit
+Add Execute MCP under Cursor Settings > MCP, or run the Execute MCP one-liner
+Configure agent prints for you.
+```
 
 ### OpenCode
 
@@ -188,11 +233,17 @@ source .toolkit/.env   # created by Setup, chmod 600 — never printed to the lo
 export OPENCODE_CONFIG_CONTENT='{"$schema":"https://opencode.ai/config.json","mcp":{"twilio-execute":{"enabled":true}}}'
 ```
 
+Configure agent installs OpenCode for you (Homebrew tap → npm) if it isn't on
+PATH yet, then prints the launch command — `cd <repo> && opencode` — rather than
+opening a new window, since OpenCode's own `/connect` step needs your input
+before it's useful.
+
 ### Pi
 
-The only one of the five the toolkit can fully install, wire, **and launch** for
-you — it needs a model to talk to (local Gemma) and a process started, so Configure
-agent does all of that in one step and opens Pi in a brand-new terminal window:
+The one of the six the toolkit fully installs, wires, **and launches** with zero
+manual follow-up beyond that — it needs a model to talk to (local Gemma) and a
+process started, so Configure agent does all of that in one step and opens Pi in
+a brand-new terminal window:
 
 ```bash
 ./toolkit
@@ -211,13 +262,13 @@ That single step:
 Pi is intentionally lightweight. It is the right tool for focused Twilio tasks, quick
 questions, and iterating on code, with no API key required. For long multi-tool agent
 runs with heavy context, use a cloud-backed agent (OpenCode + Anthropic/OpenAI is the
-recommended pairing) — or just use **Chat with local model** from the menu for quick
+recommended pairing) — or just use **Chat with Twilio** from the menu for quick
 Twilio Q&A without installing Pi at all.
 
 **Manual launch** (Configure agent is simpler):
 
 ```bash
-# Start "Model server" from the TUI first.
+# After Setup installs the local model, start "Model server" from the TUI first.
 PI_CODING_AGENT_DIR="$PWD/.toolkit/pi-agent" \
   pi --provider llamafile --model gemma4-e2b \
      --append-system-prompt .pi/routing-prompt.md
@@ -241,7 +292,7 @@ Skills (make them global):
     cp -r vendor/twilio-ai/skills/ ~/.agents/skills/
 
 Local model (OpenAI-compatible):
-    http://127.0.0.1:8080/v1   (choose Model server in the TUI)
+    http://127.0.0.1:8080/v1   (choose Model server in the TUI after Setup)
 ```
 
 Verified-compatible: Claude Code, Cursor, Codex, OpenCode, Pi, GitHub Copilot,
@@ -252,37 +303,31 @@ Gemini CLI, JetBrains Junie, and 30+ more.
 ## The local model
 
 ```bash
-./toolkit                  # choose "Chat with local model" or "Model server"
-CTX_SIZE=8192 ./toolkit    # larger context if you need it (~2.5 GB RAM)
+./toolkit                   # choose "Chat with Twilio" or "Model server"
+CTX_SIZE=65536 ./toolkit    # even more headroom for long multi-tool sessions
 ```
 
 Powered by [llamafile](https://github.com/mozilla-ai/llamafile) (Mozilla) — a single
 executable. The TUI starts the local OpenAI-compatible server in the background and
 renders chat inside the OpenTUI dashboard, so the toolkit does not appear to exit
-when you choose **Chat with local model**. Tools (OpenCode, Cursor, etc.) can connect
+when you choose **Chat with Twilio**. Tools (OpenCode, Cursor, etc.) can connect
 to `http://127.0.0.1:8080/v1` at the same time.
 
 The in-app chat starts the local server with reasoning disabled and supports a small
-safe tool surface for toolkit introspection: readiness/status, selected add-ons, and
-vendored Twilio Skill listing. It does **not** call real Twilio APIs from chat; use
+safe tool surface for toolkit introspection: local status, install choices, and
+local Twilio Skill listing. It does **not** call real Twilio APIs from chat; use
 the Execute MCP in a configured agent for that.
 
-Voice input is wired but coming soon. In Chat, `Ctrl+R` is already handled inside
-OpenTUI and shows a controlled message instead of exiting, spawning a legacy prompt,
-or attempting a missing model download.
-
-The planned local flow follows Mozilla's whisperfile getting-started shape:
-`tools/whisperfile -m models/whisper-tiny.en-q5_1.bin -f <audio> --no-prints`.
-Setup intentionally does not download whisperfile or the Whisper weights until the
-feature is ready end to end.
-
-**Memory footprint:** the model runs with a 16 384-token context window and a
-quantized KV cache (`q4_0`), keeping runtime RAM around **~2-2.5 GB**. That covers
-the full Twilio Skills system prompt plus several turns of conversation comfortably
+**Memory footprint:** the model runs with a 32 768-token context window and a
+quantized KV cache (`q4_0`), keeping runtime RAM around **~3-3.5 GB** (the
+quantized KV cache scales with context size, but is small relative to the
+model weights, so doubling the window doesn't double total RAM). That covers
+the full Twilio Skills system prompt plus many turns of conversation comfortably
 (a 4096-token window was tried first and reliably ran out of context within 2-3
-turns once Skills were loaded — a security/reliability audit flagged this before
-the event, see "Notes & caveats" below).
-Override the context window with `CTX_SIZE=<n>` if a task needs more room.
+turns once the Skills prompt was included, and even 16 384 got tight in longer multi-tool
+Pi/agent sessions — a security/reliability audit flagged the original issue
+before the event, see "Notes & caveats" below).
+Override the context window with `CTX_SIZE=<n>` if a task needs even more room.
 
 It loads a Twilio system prompt built from the Skills index, so the local model
 answers Twilio questions with the right context. Multimodal (text + image), runs on
@@ -312,12 +357,13 @@ container. The footprint is small and fully reversible:
 | Twilio CLI | npm global | `uninstall.sh` |
 | Dev Phone plugin | Twilio CLI plugins | `uninstall.sh` |
 | Scoped API key | your Twilio account | `uninstall.sh` |
-| Skills copy | `~/.agents/skills/` | `uninstall.sh` |
+| Skills copy | `~/.agents/skills/twilio/`, `~/.agents/skills/sendgrid/` | `uninstall.sh` |
+| Local config + Execute MCP creds | `.toolkit/config.json`, `.toolkit/.env` | `uninstall.sh` |
 | llamafile + model | `tools/`, `models/` (in this repo) | `uninstall.sh` |
-| voice input | coming soon; no setup download yet | n/a |
 
 ```bash
-./uninstall.sh         # reverse everything, with a confirmation per item
+./toolkit              # choose Uninstall for an in-TUI checklist
+./uninstall.sh         # same cleanup from a shell, with a confirmation per item
 ```
 
 `uninstall.sh` never runs `twilio logout` — your CLI profile stays put unless you

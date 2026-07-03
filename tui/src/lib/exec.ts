@@ -100,6 +100,29 @@ export interface NewWindowResult {
   error?: string;
 }
 
+export function openUrl(url: string): NewWindowResult {
+  try {
+    if (process.platform === "darwin") {
+      spawn("open", [url], { stdio: "ignore", detached: true }).unref();
+      return { ok: true };
+    }
+    if (process.platform === "win32") {
+      spawn("cmd.exe", ["/c", "start", "", url], { stdio: "ignore", detached: true }).unref();
+      return { ok: true };
+    }
+    const openers = ["xdg-open", "gio"];
+    for (const opener of openers) {
+      if (!have(opener)) continue;
+      const args = opener === "gio" ? ["open", url] : [url];
+      spawn(opener, args, { stdio: "ignore", detached: true }).unref();
+      return { ok: true };
+    }
+    return { ok: false, error: "No browser opener found. Visit https://twilio.world manually." };
+  } catch (e) {
+    return { ok: false, error: `Could not open https://twilio.world: ${(e as Error).message}` };
+  }
+}
+
 /** export lines for any env entries this call adds/overrides vs. the
  *  current process env — the new terminal's login shell already has
  *  everything else. */

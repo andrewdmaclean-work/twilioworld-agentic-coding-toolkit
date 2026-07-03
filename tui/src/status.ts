@@ -11,6 +11,7 @@
 // nothing freezes even though the status update itself still takes ~1s.
 
 import { existsSync, readdirSync, statSync } from "fs";
+import { homedir } from "os";
 import { join } from "path";
 import { captureAsync, fileExecutable, haveAsync } from "./lib/exec.ts";
 import { readConfig } from "./lib/config.ts";
@@ -31,7 +32,7 @@ export { ROOT };
 
 export interface ToolkitStatus {
   twilio:   { installed: boolean; profile: string; sid: string };
-  skills:   { count: number };
+  skills:   { count: number; installedCount: number };
   model:    { fileReady: boolean; runtimeReady: boolean; ready: boolean; running: boolean };
   voice:    { runtimeReady: boolean; modelReady: boolean; recorder: string; ready: boolean };
   devPhone: { installed: boolean };
@@ -74,6 +75,9 @@ export async function readStatusAsync(): Promise<ToolkitStatus> {
   const whisperRuntimeReady = fileExecutable(WHISPERFILE_DEST);
   const whisperReady = whisperModelReady();
   const skillCount = countSkills(SKILLS_DIR);
+  const installedSkillCount =
+    countSkills(join(homedir(), ".agents", "skills", "twilio")) +
+    countSkills(join(homedir(), ".agents", "skills", "sendgrid"));
   const cfg = readConfig();
 
   // Round 1: independent existence/version checks, all in flight together.
@@ -112,7 +116,7 @@ export async function readStatusAsync(): Promise<ToolkitStatus> {
 
   return {
     twilio:   { installed: twilioInstalled, profile, sid },
-    skills:   { count: skillCount },
+    skills:   { count: skillCount, installedCount: installedSkillCount },
     model:    { fileReady, runtimeReady, ready: fileReady && runtimeReady, running },
     voice:    { runtimeReady: whisperRuntimeReady, modelReady: whisperReady, recorder, ready: whisperRuntimeReady && whisperReady && Boolean(recorder) },
     devPhone: { installed: pluginsRaw.includes("plugin-dev-phone") },

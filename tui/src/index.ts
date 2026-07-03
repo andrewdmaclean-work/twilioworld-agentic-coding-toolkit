@@ -1,7 +1,8 @@
 // index.ts — TwilioWorld AI Toolkit TUI
-// Layout: branded header · actions · readiness · selected-action detail.
+// Layout: branded header · actions · active features · selected-action detail.
 
 import {
+  ASCIIFontRenderable,
   BoxRenderable,
   SelectRenderable,
   SelectRenderableEvents,
@@ -14,11 +15,13 @@ import { readStatusAsync, type ToolkitStatus } from "./status.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
 import { buildAgentScreen } from "./screens/agent.ts";
 import { buildChatScreen } from "./screens/chat.ts";
+import { buildUninstallScreen } from "./screens/uninstall.ts";
+import { buildInvadersScreen } from "./screens/invaders.ts";
 import {
   LLAMAFILE_DEST, ROOT, MODEL_SERVER_URL,
 } from "./lib/constants.ts";
 import { serverArgs, modelReady } from "./lib/model.ts";
-import { openInNewWindow, capture, have, startDaemon } from "./lib/exec.ts";
+import { openInNewWindow, openUrl, capture, have, startDaemon } from "./lib/exec.ts";
 import { pathNodeVersion, supportsPiNode } from "./lib/node-version.ts";
 
 // ── Palette ──────────────────────────────────────────────────────────
@@ -124,72 +127,40 @@ function wrapText(text: string, width: number): string {
   return out.join("\n");
 }
 
-function readinessScore(s: ToolkitStatus | null): { ready: number; total: number } {
-  if (!s) return { ready: 0, total: 6 };
-  const checks = [
-    s.twilio.installed && Boolean(s.twilio.sid),
-    s.skills.count > 0,
-    s.model.fileReady,
-    s.model.runtimeReady,
-    true,
-    !s.addons.devPhone || s.devPhone.installed,
-  ];
-  return { ready: checks.filter(Boolean).length, total: checks.length };
-}
-
 function nextMove(s: ToolkitStatus | null): string {
   if (!s) return "Loading local status.";
   if (!s.model.ready && s.addons.localGemma) return "Run Setup to download the local Gemma model and llamafile runtime.";
   if (s.addons.executeMcp && !process.env.TWILIO_MCP_CREDS) return "Export TWILIO_MCP_CREDS before using Execute MCP.";
-  if (s.model.ready && !s.model.running) return "Start Model server, then Chat with local model or Configure an agent.";
-  return "Choose Setup to change add-ons or Configure agent to wire up any agent (including Pi).";
+  if (s.model.ready && !s.model.running) return "Start Model server, then Chat with Twilio or Configure an agent.";
+  return "Choose Setup to change install choices or Configure agent to wire up any agent.";
 }
 
 function headlineText(s: ToolkitStatus | null): string {
-  const score = readinessScore(s);
-  const model = s?.model.running ? "model online" : s?.model.ready ? "model ready" : "model missing";
+  const model = s?.model.running ? "model online" : s?.addons.localGemma ? (s.model.ready ? "model ready" : "model missing") : "";
   const twilio = s?.twilio.sid ? `Twilio ${s.twilio.profile}` : "Twilio not logged in";
-  return `Readiness ${score.ready}/${score.total}  |  ${model}  |  ${twilio}`;
+  return [model, twilio].filter(Boolean).join("  |  ");
 }
 
 function addonLine(s: ToolkitStatus | null): string {
-  if (!s) return "Add-ons loading";
-  return `Add-ons  Gemma:${yesNo(s.addons.localGemma)}  Voice:${yesNo(s.addons.voiceInput)}  Skills:${yesNo(s.addons.twilioSkills)}  Docs:${yesNo(s.addons.docsMcp)}  Execute:${yesNo(s.addons.executeMcp)}  Dev Phone:${yesNo(s.addons.devPhone)}`;
+  if (!s) return "Install choices loading";
+  return `Install choices  ${selectedAddons(s)}`;
 }
 
 // ── Status panel lines (left-col) ───────────────────────────────────
 function statusLines(s: ToolkitStatus | null) {
-  if (!s) return [
-    "Twilio CLI", "Skills", "Model file", "Runtime", "Voice", "Node", "Dev Phone",
-  ].map((l) => ({ text: `  ·  ${l.padEnd(14)} checking…`, fg: DIM }));
+  if (!s) return [{ text: "  ·  Checking local status...", fg: DIM }];
 
   const ok  = (l: string, v: string) => ({ text: `  ✓  ${l.padEnd(12)} ${v}`, fg: GREEN });
-  const bad = (l: string, v: string) => ({ text: `  ✗  ${l.padEnd(12)} ${v}`, fg: RED   });
-  const warn = (l: string, v: string) => ({ text: `  !  ${l.padEnd(12)} ${v}`, fg: YELLOW });
-  const dim = (l: string, v: string) => ({ text: `  ·  ${l.padEnd(12)} ${v}`, fg: DIM2  });
+  const lines = [];
 
-  return [
-    s.twilio.installed && s.twilio.sid
-      ? ok ("Twilio CLI",  `${s.twilio.profile} (…${s.twilio.sid.slice(-4)})`)
-      : s.twilio.installed ? warn("Twilio CLI", "installed, not logged in") : dim("Twilio CLI", "not installed"),
-    s.skills.count > 0
-      ? ok ("Skills",      `${s.skills.count} loaded`)
-      : bad("Skills",      "not loaded — run Setup"),
-    s.model.fileReady      ? ok ("Model file",  "Gemma ready")
-                           : bad("Model file",  "not downloaded"),
-    s.model.runtimeReady   ? ok ("Runtime",     "llamafile ready")
-                           : bad("Runtime",     "missing"),
-    !s.addons.voiceInput   ? dim("Voice",       "not selected")
-                           : warn("Voice",      "coming soon"),
-    s.node.supportsPi      ? ok ("Node",        s.node.version)
-                           : warn("Node",       s.node.version),
-    s.devPhone.installed  ? ok ("Dev Phone",   "installed")
-                          : dim("Dev Phone",   "not installed"),
-  ];
+  if (s.model.running) lines.push(ok("Local model", "running on :8080"));
+  if (process.env.TWILIO_MCP_CREDS) lines.push(ok("Execute MCP", "creds loaded"));
+
+  return lines.length ? lines : [{ text: "  ·  No running toolkit services.", fg: DIM2 }];
 }
 
 // ── Menu definition ──────────────────────────────────────────────────
-type ItemId = "chat"|"server"|"devphone"|"setup"|"agent"|"exit";
+type ItemId = "chat"|"server"|"devphone"|"setup"|"agent"|"signup"|"uninstall"|"exit";
 
 interface MenuItem {
   id: ItemId;
@@ -200,14 +171,14 @@ interface MenuItem {
 
 const ALL_ITEMS: MenuItem[] = [
   { id: "chat",
-    label: () => "Chat with local model",
+    label: () => "Chat with Twilio",
     detail: () => "interactive chat + OpenAI API on :8080",
-    visible: (s) => s.addons.localGemma === true || s.model.ready },
+    visible: (s) => s.model.ready },
 
   { id: "server",
     label: (s) => s?.model.running ? "Model server   ✓ :8080" : "Model server",
     detail: (s) => s?.model.running ? "running on :8080" : "headless API server for tools",
-    visible: (s) => s.addons.localGemma === true || s.model.ready },
+    visible: (s) => s.model.ready },
 
   { id: "devphone",
     label: () => "Dev Phone",
@@ -216,12 +187,22 @@ const ALL_ITEMS: MenuItem[] = [
 
   { id: "setup",
     label: () => "Setup",
-    detail: () => "install CLIs, download model, choose add-ons",
+    detail: () => "choose what this toolkit installs or wires into agents",
     visible: () => true },
 
   { id: "agent",
     label: () => "Configure agent",
     detail: () => "wire Skills + MCP servers into any agent — Pi, OpenCode, Claude Code, Cursor, Codex",
+    visible: () => true },
+
+  { id: "signup",
+    label: () => "Sign up for TwilioWorld",
+    detail: () => "open twilio.world in your browser",
+    visible: () => true },
+
+  { id: "uninstall",
+    label: () => "Uninstall",
+    detail: () => "choose exactly what to remove from this machine",
     visible: () => true },
 
   { id: "exit",
@@ -231,7 +212,7 @@ const ALL_ITEMS: MenuItem[] = [
 ];
 
 function visibleItems(s: ToolkitStatus | null): MenuItem[] {
-  if (!s) return ALL_ITEMS.filter((m) => ["setup","agent","exit"].includes(m.id));
+  if (!s) return ALL_ITEMS.filter((m) => ["setup","agent","signup","uninstall","exit"].includes(m.id));
   return ALL_ITEMS.filter((m) => m.visible(s));
 }
 
@@ -242,11 +223,10 @@ function yesNo(v: boolean): string {
 function selectedAddons(s: ToolkitStatus | null): string {
   if (!s) return "loading";
   const names: Array<[string, string]> = [
-    ["localGemma", "Gemma"],
-    ["voiceInput", "Voice"],
-    ["twilioSkills", "Skills"],
-    ["docsMcp", "Docs MCP"],
-    ["executeMcp", "Execute MCP"],
+    ["localGemma", "Local chat model"],
+    ["twilioSkills", "Agent Skills"],
+    ["docsMcp", "Agent Docs MCP"],
+    ["executeMcp", "Agent Execute MCP"],
     ["devPhone", "Dev Phone"],
   ];
   const enabled = names.filter(([k]) => s.addons[k]).map(([, name]) => name);
@@ -259,15 +239,15 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
     case "setup":
       return [
         "Purpose",
-        "  Choose add-ons, then install only what those choices require.",
+        "  Choose what to install locally and what to wire into coding agents.",
         "",
-        "Current selection",
+        "Current choices",
         `  ${selectedAddons(s)}`,
         "",
         "Touches",
         "  .toolkit/config.json",
-        "  tools/ and models/ for local Gemma",
-        "  ~/.agents/skills/ when Skills is enabled",
+        "  tools/ and models/ when local chat model is selected",
+        "  ~/.agents/skills/ when agent Skills are selected",
         "",
         "Network installs/downloads happen only after the confirmation step.",
       ].join("\n");
@@ -279,30 +259,31 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
         "  in a new terminal window when setup finishes.",
         "",
         "Inputs",
-        `  Skills available: ${s?.skills.count ?? 0}`,
-        `  Docs MCP selected: ${yesNo(Boolean(s?.addons.docsMcp))}`,
-        `  Execute MCP selected: ${yesNo(Boolean(s?.addons.executeMcp))}`,
+        `  Install Twilio Skills for agents: ${yesNo(Boolean(s?.addons.twilioSkills))}`,
+        `  Add Docs MCP to agents: ${yesNo(Boolean(s?.addons.docsMcp))}`,
+        `  Add Execute MCP to agents: ${yesNo(Boolean(s?.addons.executeMcp))}`,
         `  Execute creds exported: ${yesNo(Boolean(process.env.TWILIO_MCP_CREDS))}`,
       ].join("\n");
     case "chat":
       return [
         "Purpose",
-        "  Chat inside OpenTUI against the local OpenAI-compatible API on :8080.",
+        "  Chat with Twilio inside OpenTUI using the local Gemma model.",
         "",
-        "Readiness",
+        "Uses",
         `  Runtime ready: ${yesNo(Boolean(s?.model.runtimeReady))}`,
         `  Weights ready: ${yesNo(Boolean(s?.model.fileReady))}`,
-        `  Voice input: ${s?.addons.voiceInput ? "coming soon; Ctrl+R is wired" : "not selected"}`,
+        `  Twilio Skills: ${yesNo((s?.skills.count ?? 0) > 0)} (always used by local chat)`,
+        "  Docs MCP: yes (always used by local chat)",
         `  Already running: ${yesNo(Boolean(s?.model.running))}`,
         "",
-        "The model server starts in the background if needed.",
+        "Gemma is required for this local chat. The model server starts in the background if needed.",
       ].join("\n");
     case "server":
       return [
         "Purpose",
         "  Start the local model API in the background for tools and agents.",
         "",
-        "Readiness",
+        "Uses",
         `  Runtime ready: ${yesNo(Boolean(s?.model.runtimeReady))}`,
         `  Weights ready: ${yesNo(Boolean(s?.model.fileReady))}`,
         `  Endpoint: ${MODEL_SERVER_URL}`,
@@ -313,11 +294,35 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
         "Purpose",
         "  Open Twilio Dev Phone from the Twilio CLI.",
         "",
-        "Readiness",
+        "Uses",
         `  Twilio CLI installed: ${yesNo(Boolean(s?.twilio.installed))}`,
         `  Logged in: ${yesNo(Boolean(s?.twilio.sid))}`,
         "",
         "Use a spare Twilio number. Dev Phone can overwrite number webhooks.",
+      ].join("\n");
+    case "uninstall":
+      return [
+        "Purpose",
+        "  Remove selected toolkit-installed pieces from this machine.",
+        "",
+        "Choose from",
+        "  * Dev Phone plugin",
+        "  * Toolkit-created API key",
+        "  * Global Twilio CLI",
+        "  * Twilio/SendGrid skills installed for agents",
+        "  * Local toolkit copy of Twilio Skills",
+        "  * Local .toolkit state and Execute MCP creds",
+        "  * Downloaded local model/runtime files",
+        "",
+        "Nothing is removed until you check items and confirm. Twilio logout is never run.",
+      ].join("\n");
+    case "signup":
+      return [
+        "Purpose",
+        "  Open the TwilioWorld signup page in your browser.",
+        "",
+        "Destination",
+        "  https://twilio.world",
       ].join("\n");
   }
 }
@@ -337,9 +342,24 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     flexDirection: "column",
     backgroundColor: BG_PANEL,
   });
+  // Small ASCII wordmark, stacked above the subtitle — @opentui/core ships
+  // this font data already (no figlet/lolcat dependency needed). A multi-row
+  // glyph can't sit "inline with the border" (the border is only 1 row
+  // tall, every ASCIIFont is >= 2 rows — tried it, it either collides with
+  // the subtitle or gets half its letters clipped off). "TwilioWorld" in
+  // the "tiny" font is only 44 cols x 2 rows, so it stacks in normal flow
+  // above the subtitle text without needing any special positioning.
+  // resize() below only shows it once there's room, falling back to the
+  // plain border title on narrower terminals so nothing clips.
+  const banner = new ASCIIFontRenderable(renderer, {
+    id: "header-banner",
+    text: "TwilioWorld",
+    font: "tiny",
+    color: RED,
+  });
   const titleText = new TextRenderable(renderer, {
     id: "header-title",
-    content: "Twilio agent runtime, skills, docs, and local model control",
+    content: "Agentic Coding Toolkit",
     fg: WHITE,
   });
   const headline = new TextRenderable(renderer, {
@@ -352,6 +372,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     content: `Next: ${nextMove(null)}`,
     fg: YELLOW,
   });
+  header.add(banner);
   header.add(titleText);
   header.add(headline);
   header.add(nextText);
@@ -383,7 +404,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 
   const addonCol = new BoxRenderable(renderer, {
     id: "addon-col", borderStyle: "single", borderColor: RED_DIM,
-    title: " Add-ons ", titleColor: RED,
+    title: " Install Choices ", titleColor: RED,
     flexShrink: 0, paddingX: 1,
     backgroundColor: BG_PANEL,
   });
@@ -396,12 +417,12 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 
   const statusCol = new BoxRenderable(renderer, {
     id: "status-col", borderStyle: "single", borderColor: RED_DIM,
-    title: " Readiness ", titleColor: RED,
+    title: " Active ", titleColor: RED,
     flexShrink: 0, flexDirection: "column",
     backgroundColor: BG_PANEL,
   });
-  const statusTexts = statusLines(null).map((l, i) =>
-    new TextRenderable(renderer, { id: `sl-${i}`, content: l.text, fg: l.fg })
+  const statusTexts = Array.from({ length: STATUS_ROWS }, (_, i) =>
+    new TextRenderable(renderer, { id: `sl-${i}`, content: "", fg: DIM })
   );
   statusTexts.forEach((t) => statusCol.add(t));
 
@@ -428,12 +449,18 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   body.add(rightCol);
 
   const bottomBar = new TextRenderable(renderer, {
-    id: "bottom", content: "  ↑/↓ or j/k navigate    Enter run    Setup changes add-ons    q quit",
+    id: "bottom", content: "  ↑/↓ or j/k navigate    Enter run    Setup changes install choices    q quit",
     fg: DIM,
   });
 
   const dashboard = new BoxRenderable(renderer, {
-    id: "dashboard", flexDirection: "column", padding: 0, gap: 1,
+    id: "dashboard",
+    width: "100%",
+    height: "100%",
+    flexGrow: 1,
+    flexDirection: "column",
+    padding: 0,
+    gap: 1,
   });
   dashboard.add(header);
   dashboard.add(body);
@@ -448,13 +475,22 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     const H = renderer.height;
     const W = renderer.width;
 
-    const headerH = 5;
+    // "TwilioWorld" in the "tiny" font is 44 cols; header has 2 border cols
+    // + 2 padding cols (paddingX: 1 each side) = 4 cols of overhead, plus a
+    // little breathing room so it doesn't sit flush against the border.
+    const BANNER_MIN_WIDTH = 44 + 4 + 8;
+    const wide = W >= BANNER_MIN_WIDTH;
+    banner.visible = wide;
+    header.title = wide ? "" : " TwilioWorld AI Toolkit ";
+
+    const headerH = wide ? 7 : 5; // 2 banner rows + 3 text rows + 2 border, vs. 3 text rows + 2 border
     const bodyH = Math.max(8, H - headerH - 2);
     const rightW = Math.max(20, W - MENU_W - 1); // 1 = gap between columns
 
     // Explicit sizes — Yoga flexGrow handles width of rightCol,
     // but height needs to be explicit for SelectRenderable.
     body.height = bodyH;
+    body.width = W;
     header.height = headerH;
     header.width = W;
 
@@ -510,9 +546,11 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     lastStatus = s;
     refreshHeaderAndAddon(s);
 
-    statusLines(s).forEach((l, i) => {
-      statusTexts[i].content = clip(l.text, Math.max(10, (statusCol.width ?? renderer.width) - 2));
-      statusTexts[i].fg = l.fg;
+    const lines = statusLines(s).slice(0, STATUS_ROWS);
+    statusTexts.forEach((text, i) => {
+      const line = lines[i];
+      text.content = line ? clip(line.text, Math.max(10, (statusCol.width ?? renderer.width) - 2)) : "";
+      text.fg = line?.fg ?? DIM;
     });
 
     const items = visibleItems(s);
@@ -532,8 +570,35 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     setDetail(lastItems[idx], lastStatus);
   });
 
+  const typedSecret = "twilio";
+  const konamiSecret = ["up", "up", "down", "down", "left", "right", "left", "right", "b", "a"];
+  let typedBuffer = "";
+  let konamiIndex = 0;
+
   menuList.onKeyDown = (key) => {
-    if (key.name === "q") onQuit();
+    if (key.name === "q") {
+      onQuit();
+      return;
+    }
+
+    typedBuffer = `${typedBuffer}${key.name ?? ""}`.slice(-typedSecret.length);
+    if (typedBuffer === typedSecret) {
+      typedBuffer = "";
+      konamiIndex = 0;
+      showRoute(buildInvadersScreen(renderer, backRoute), "Signal Invaders");
+      return;
+    }
+
+    if (key.name === konamiSecret[konamiIndex]) {
+      konamiIndex++;
+      if (konamiIndex === konamiSecret.length) {
+        typedBuffer = "";
+        konamiIndex = 0;
+        showRoute(buildInvadersScreen(renderer, backRoute), "Signal Invaders");
+      }
+    } else {
+      konamiIndex = key.name === konamiSecret[0] ? 1 : 0;
+    }
   };
 
   function showRoute(screen: BoxRenderable, title: string) {
@@ -545,6 +610,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     routeScreen = screen;
     detailCol.title = ` ${title} `;
     detailCol.add(screen);
+    if (screen.focusable) screen.focus();
   }
 
   function backRoute() {
@@ -631,11 +697,14 @@ async function main() {
   }
   function back() { backRoute(); busy = false; poll(); }
 
+  let flashId = 0;
   function flash(msg: string, color = YELLOW) {
+    const id = ++flashId;
     bottomBar.content = `  ${msg}`;
     bottomBar.fg = color;
     setTimeout(() => {
-      bottomBar.content = "  ↑/↓ or j/k navigate    Enter run    Setup changes add-ons    q quit";
+      if (id !== flashId) return;
+      bottomBar.content = "  ↑/↓ or j/k navigate    Enter run    Setup changes install choices    q quit";
       bottomBar.fg = DIM;
     }, 4000);
   }
@@ -646,6 +715,12 @@ async function main() {
       case "exit":   shutdown(0); break;
       case "setup":  busy = true; showRoute(buildSetupScreen(renderer, back, back), "Setup"); break;
       case "agent":  busy = true; showRoute(buildAgentScreen(renderer, back, back), "Configure Agent"); break;
+      case "signup": {
+        const res = openUrl("https://twilio.world");
+        flash(res.ok ? "Opening twilio.world in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
+        break;
+      }
+      case "uninstall": busy = true; showRoute(buildUninstallScreen(renderer, back, back), "Uninstall"); break;
 
       case "chat": {
         const { runtime, weights } = modelReady();

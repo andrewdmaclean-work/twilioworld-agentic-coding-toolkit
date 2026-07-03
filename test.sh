@@ -89,12 +89,13 @@ check "model starts reasoning off"    bash -c 'grep -q "\"--reasoning\", \"off\"
 check "voice module uses whisperfile" bash -c 'grep -q "transcribeVoiceFile" tui/src/lib/voice.ts && grep -q "WHISPERFILE_DEST" tui/src/lib/voice.ts'
 check "voice uses documented whisper args" bash -c 'grep -q "\"-m\", q(WHISPER_MODEL_DEST)" tui/src/lib/voice.ts && grep -q "\"--no-prints\"" tui/src/lib/voice.ts'
 check "voice input is gated coming soon" bash -c 'grep -q "VOICE_COMING_SOON" tui/src/lib/voice.ts && grep -q "Whisper model is not bundled yet" tui/src/lib/voice.ts'
-check "setup marks voice coming soon" bash -c 'grep -q "Voice input — coming soon" tui/src/lib/setup.ts && grep -q "Planned command" tui/src/lib/setup.ts'
+check "setup hides unfinished voice input" bash -c '! grep -q "Voice input — coming soon" tui/src/lib/setup.ts && ! grep -q "Planned command" tui/src/lib/setup.ts'
 check "chat stays inside OpenTUI"     bash -c 'grep -q "buildChatScreen" tui/src/index.ts && ! grep -RIn "combinedArgs\\|chatArgs\\|--chat" tui/src 2>/dev/null'
 check "chat enter sends message"      bash -c 'grep -q "InputRenderableEvents.ENTER" tui/src/screens/chat.ts && ! grep -q "input.onSubmit" tui/src/screens/chat.ts'
 check "chat supports tool calls"      bash -c 'grep -q "CHAT_TOOLS" tui/src/screens/chat.ts && grep -q "tool_choice" tui/src/screens/chat.ts && grep -q "runChatTool" tui/src/screens/chat.ts'
 check "chat disables markdown replies" bash -c 'grep -q "plainTextChatResponse" tui/src/screens/chat.ts && grep -q "plain text only" tui/src/screens/chat.ts && grep -q "Do not use Markdown" tui/src/screens/chat.ts'
-check "chat ctrl-r is wired"          bash -c 'grep -q "isVoiceShortcut" tui/src/screens/chat.ts && grep -q "key.ctrl" tui/src/screens/chat.ts && grep -q "Ctrl+R voice input is wired" tui/src/screens/chat.ts'
+check "chat hides unfinished voice shortcut" bash -c 'grep -q "isVoiceShortcut" tui/src/screens/chat.ts && grep -q "key.ctrl" tui/src/screens/chat.ts && ! grep -q "Ctrl+R voice input is wired" tui/src/screens/chat.ts'
+check "chat transcript scroll is wired" bash -c 'grep -q "isTranscriptScrollKey" tui/src/screens/chat.ts && grep -q "transcript.handleKeyPress" tui/src/screens/chat.ts && grep -q "pageup" tui/src/screens/chat.ts'
 check "chat can read skills"         bash -c 'grep -q "search_twilio_skills" tui/src/lib/chat-tools.ts && grep -q "read_twilio_skill" tui/src/lib/chat-tools.ts'
 check "chat can use docs MCP"        bash -c 'grep -q "search_twilio_docs_mcp" tui/src/lib/chat-tools.ts && grep -q "twilio__search" tui/src/lib/chat-tools.ts && grep -q "twilio__retrieve" tui/src/lib/chat-tools.ts'
 check "index.ts has all menu items"   bash -c '
@@ -102,11 +103,44 @@ check "index.ts has all menu items"   bash -c '
   grep -q '"'"'server'"'"' tui/src/index.ts &&
   grep -q '"'"'devphone'"'"' tui/src/index.ts &&
   grep -q '"'"'setup'"'"' tui/src/index.ts &&
-  grep -q '"'"'agent'"'"' tui/src/index.ts
+  grep -q '"'"'agent'"'"' tui/src/index.ts &&
+  grep -q '"'"'signup'"'"' tui/src/index.ts &&
+  grep -q '"'"'uninstall'"'"' tui/src/index.ts
+'
+check "signup opens TwilioWorld" bash -c '
+  grep -q "Sign up for TwilioWorld" tui/src/index.ts &&
+  grep -q "https://twilio.world" tui/src/index.ts &&
+  grep -q "export function openUrl" tui/src/lib/exec.ts
+'
+check "terminal easter egg is wired" bash -c '
+  grep -q "buildInvadersScreen" tui/src/index.ts &&
+  grep -q "Signal Invaders" tui/src/screens/invaders.ts &&
+  grep -q "screen.focusable = true" tui/src/screens/invaders.ts &&
+  grep -q "konamiSecret" tui/src/index.ts &&
+  grep -q "typedSecret = \"twilio\"" tui/src/index.ts
+'
+check "uninstall available from TUI" bash -c '
+  grep -q "buildUninstallScreen" tui/src/index.ts &&
+  grep -q "runUninstall" tui/src/lib/uninstall.ts &&
+  grep -q "Uninstall" tui/src/screens/uninstall.ts
 '
 check "no dedicated Pi menu item"     bash -c '! grep -q "case \"pi\"" tui/src/index.ts'
+check "index.ts has ASCII wordmark banner" bash -c '
+  grep -q "ASCIIFontRenderable" tui/src/index.ts &&
+  grep -q "\"TwilioWorld\"" tui/src/index.ts &&
+  grep -q "font: \"tiny\"" tui/src/index.ts &&
+  grep -q "banner.visible" tui/src/index.ts
+'
 check "agent picker has no Pi favoritism" bash -c '! grep -iq "recommended\|built-in" tui/src/screens/agent.ts'
 check "configure-agent launches Pi via lib/pi.ts" grep -q 'launchPi' tui/src/lib/configure-agent.ts
+check "configure-agent auto-installs Claude/Codex/Cursor" bash -c '
+  grep -q "@anthropic-ai/claude-code" tui/src/lib/configure-agent.ts &&
+  grep -q "@openai/codex" tui/src/lib/configure-agent.ts &&
+  grep -q "cursor-cli" tui/src/lib/configure-agent.ts
+'
+check "configure-agent auto-launches Claude/Codex/Cursor" bash -c '
+  grep -c "openInNewWindow" tui/src/lib/configure-agent.ts | grep -q "^[3-9]"
+'
 check "index uses openInNewWindow"    bash -c 'grep -q "openInNewWindow" tui/src/index.ts && grep -q "openInNewWindow" tui/src/lib/pi.ts'
 check "no suspend/resume left in index" bash -c '! grep -q "renderer.suspend\|renderer.resume" tui/src/index.ts'
 check "exec.ts has new-window opener" grep -q 'export function openInNewWindow' tui/src/lib/exec.ts
@@ -116,9 +150,9 @@ check "no legacy route purple remains" bash -c '! grep -RIn "C084FC\|3B2A52" tui
 check "no legacy shell scripts remain" bash -c '! ls setup.sh configure-agent.sh start-model.sh toolkit.sh toolkit-tui.sh build-system-prompt.js 2>/dev/null | grep -q .'
 
 echo "── Security audit fixes ──"
-check "E-11 context window raised (model.ts)"      grep -q '"16384"' tui/src/lib/model.ts
-check "E-11 context window raised (pi models.json)" bash -c 'command -v jq && jq -e ".providers.llamafile.models[0].contextWindow == 16384" .pi/models.json || python3 -c "import json; d=json.load(open(\".pi/models.json\")); assert d[\"providers\"][\"llamafile\"][\"models\"][0][\"contextWindow\"] == 16384"'
-check "E-11 context window raised (opencode.json)"  bash -c 'command -v jq && jq -e ".provider.llamafile.models[\"gemma4-e2b\"].limit.context == 16384" opencode.json || python3 -c "import json; d=json.load(open(\"opencode.json\")); assert d[\"provider\"][\"llamafile\"][\"models\"][\"gemma4-e2b\"][\"limit\"][\"context\"] == 16384"'
+check "E-11 context window raised (model.ts)"      grep -q '"32768"' tui/src/lib/model.ts
+check "E-11 context window raised (pi models.json)" bash -c 'command -v jq && jq -e ".providers.llamafile.models[0].contextWindow == 32768" .pi/models.json || python3 -c "import json; d=json.load(open(\".pi/models.json\")); assert d[\"providers\"][\"llamafile\"][\"models\"][0][\"contextWindow\"] == 32768"'
+check "E-11 context window raised (opencode.json)"  bash -c 'command -v jq && jq -e ".provider.llamafile.models[\"gemma4-e2b\"].limit.context == 32768" opencode.json || python3 -c "import json; d=json.load(open(\"opencode.json\")); assert d[\"provider\"][\"llamafile\"][\"models\"][\"gemma4-e2b\"][\"limit\"][\"context\"] == 32768"'
 check "E-2/M-3 curl downloads resume + bound redirects" bash -c 'grep -q "curlDownloadArgs" tui/src/lib/setup.ts && grep -q "\-\-max-redirs" tui/src/lib/setup.ts && grep -q "\"-C\", \"-\"" tui/src/lib/setup.ts'
 check "E-8/H-4 root guard in index.ts" grep -q 'assertNotRoot' tui/src/index.ts
 check "E-8/H-4 root guard in toolkit entry" bash -c 'grep -q "EUID" toolkit && grep -q "should not be run as root" toolkit'
