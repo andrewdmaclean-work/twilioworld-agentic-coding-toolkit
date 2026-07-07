@@ -20,9 +20,14 @@ export type AddonKey =
   | "voiceInput"
   | "llamaUiMcp";
 
+export type ModelReasoningMode = "off" | "on" | "auto";
+
 export interface ToolkitConfig {
   version: number;
   addons: Record<AddonKey, boolean>;
+  settings: {
+    modelReasoning: ModelReasoningMode;
+  };
 }
 
 const ALL_ADDONS: AddonKey[] = [
@@ -35,8 +40,13 @@ const ALL_ADDONS: AddonKey[] = [
   "llamaUiMcp",
 ];
 
+function validReasoningMode(value: unknown): ModelReasoningMode {
+  return value === "on" || value === "auto" ? value : "off";
+}
+
 export function readConfig(): ToolkitConfig {
   const allFalse = Object.fromEntries(ALL_ADDONS.map((k) => [k, false])) as Record<AddonKey, boolean>;
+  let modelReasoning: ModelReasoningMode = "off";
 
   // Build base from tracked defaults (toolkit.defaults.json or legacy).
   // This means new addon keys added to defaults are visible to users whose
@@ -50,6 +60,7 @@ export function readConfig(): ToolkitConfig {
         for (const k of ALL_ADDONS) {
           if (d?.addons?.[k] === true) base[k] = true;
         }
+        modelReasoning = validReasoningMode(d?.settings?.modelReasoning);
       } catch { /* ignore */ }
       break;
     }
@@ -64,21 +75,34 @@ export function readConfig(): ToolkitConfig {
       for (const k of ALL_ADDONS) {
         if (typeof local?.addons?.[k] === "boolean") base[k] = local.addons[k];
       }
-      return { version: local.version ?? 1, addons: base };
+      modelReasoning = validReasoningMode(local?.settings?.modelReasoning ?? modelReasoning);
+      return { version: local.version ?? 1, addons: base, settings: { modelReasoning } };
     } catch {
-      return { version: 1, addons: base };
+      return { version: 1, addons: base, settings: { modelReasoning } };
     }
   }
 
-  return { version: 1, addons: base };
+  return { version: 1, addons: base, settings: { modelReasoning } };
 }
 
 export function addonEnabled(key: AddonKey): boolean {
   return readConfig().addons[key] === true;
 }
 
-export function writeConfig(addons: Record<AddonKey, boolean>): void {
+export function writeConfig(
+  addons: Record<AddonKey, boolean>,
+  settings: ToolkitConfig["settings"] = readConfig().settings,
+): void {
   mkdirSync(CONFIG_DIR, { recursive: true });
-  const config: ToolkitConfig = { version: 1, addons };
+  const config: ToolkitConfig = { version: 1, addons, settings };
   writeFileSync(CONFIG_FILE, JSON.stringify(config, null, 2) + "\n");
+}
+
+export function modelReasoningMode(): ModelReasoningMode {
+  return readConfig().settings.modelReasoning;
+}
+
+export function setModelReasoningMode(mode: ModelReasoningMode): void {
+  const config = readConfig();
+  writeConfig(config.addons, { ...config.settings, modelReasoning: validReasoningMode(mode) });
 }

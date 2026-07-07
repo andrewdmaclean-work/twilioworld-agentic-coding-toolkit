@@ -37,6 +37,10 @@ run_doctor() {
   local fail=0
   echo "TwilioWorld Toolkit Doctor"
   echo "repo: $ROOT"
+  case "${MODEL_REASONING:-off}" in
+    on|auto) echo "model reasoning: ${MODEL_REASONING}" ;;
+    *) echo "model reasoning: off" ;;
+  esac
   echo
 
   doctor_check "interactive terminal" test -t 0 || fail=1

@@ -29,7 +29,8 @@ check "toolkit invokes OpenTUI"       grep -q 'bun run src/index.ts' toolkit
 check "toolkit has doctor command"    bash -c '
   grep -q "run_doctor" toolkit &&
   grep -q "TwilioWorld Toolkit Doctor" toolkit &&
-  grep -q "git submodule update --init --recursive" toolkit
+  grep -q "git submodule update --init --recursive" toolkit &&
+  grep -q "model reasoning" toolkit
 '
 
 echo "── TypeScript project ──"
@@ -56,7 +57,14 @@ check "opencode.json has execute MCP" grep -q 'twilio-execute' opencode.json
 check "opencode.json has llamafile"   grep -q 'gemma4-e2b' opencode.json
 check "defaults valid JSON"           bash -c 'command -v jq && jq empty toolkit.defaults.json || python3 -c "import json,sys; json.load(open(\"toolkit.defaults.json\"))"'
 check "defaults have Gemma on, no Pi add-on" bash -c 'command -v jq && jq -e ".addons.localGemma and (.addons | has(\"builtInPi\") | not)" toolkit.defaults.json || python3 -c "import json; d=json.load(open(\"toolkit.defaults.json\")); assert d[\"addons\"][\"localGemma\"] and \"builtInPi\" not in d[\"addons\"]"'
+check "defaults disable model reasoning" bash -c 'command -v jq && jq -e ".settings.modelReasoning == \"off\"" toolkit.defaults.json || python3 -c "import json; d=json.load(open(\"toolkit.defaults.json\")); assert d[\"settings\"][\"modelReasoning\"] == \"off\""'
 check "builtInPi removed from config schema" bash -c '! grep -q "builtInPi" tui/src/lib/config.ts'
+check "config persists model reasoning" bash -c '
+  grep -q "ModelReasoningMode" tui/src/lib/config.ts &&
+  grep -q "settings" tui/src/lib/config.ts &&
+  grep -q "modelReasoning" tui/src/lib/config.ts &&
+  grep -q "setModelReasoningMode" tui/src/lib/config.ts
+'
 
 echo "── Library modules ──"
 check "constants.ts exists"           test -f tui/src/lib/constants.ts
@@ -116,7 +124,16 @@ check "model readiness waits for slow startup" bash -c '
   grep -q "elapsed" tui/src/screens/chat.ts &&
   grep -q "\-\-max-time" tui/src/lib/model.ts
 '
-check "model starts with reasoning enabled" bash -c 'grep -q "\"--reasoning\", \"auto\"" tui/src/lib/model.ts && grep -q "\"--reasoning-budget\", \"-1\"" tui/src/lib/model.ts'
+check "model reasoning is configurable" bash -c '
+  grep -q "MODEL_REASONING" tui/src/lib/model.ts &&
+  grep -q "modelReasoningMode" tui/src/lib/model.ts &&
+  grep -q "setModelReasoningMode" tui/src/index.ts &&
+  grep -q "Model thinking:" tui/src/index.ts &&
+  grep -q "validReasoning" tui/src/lib/model.ts &&
+  grep -q "\"--reasoning\", MODEL_REASONING" tui/src/lib/model.ts &&
+  grep -q "MODEL_REASONING=on" README.md &&
+  ! grep -q "\"--reasoning-budget\", \"-1\"" tui/src/lib/model.ts
+'
 check "model cache args are compatible" bash -c '
   grep -q "\"--cache-type-v\", \"q4_0\"" tui/src/lib/model.ts &&
   grep -q "\"--flash-attn\", \"on\"" tui/src/lib/model.ts &&

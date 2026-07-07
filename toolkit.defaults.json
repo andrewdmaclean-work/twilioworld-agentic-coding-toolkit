@@ -8,5 +8,8 @@
     "localGemma": true,
     "voiceInput": false,
     "llamaUiMcp": true
+  },
+  "settings": {
+    "modelReasoning": "off"
   }
 }

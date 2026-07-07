@@ -1,14 +1,16 @@
 export const TWILIO_AI_FACTS = [
-  "Twilio Skills help agents choose the right product path before code gets written.",
-  "The Docs MCP lets agents search Twilio docs and API operations by natural-language query.",
-  "Skills and Docs MCP work best together: Skills guide the plan; Docs MCP pulls exact API details.",
-  "Execute MCP is intentionally separate from Docs MCP because it can call real Twilio APIs.",
-  "The toolkit keeps Execute MCP off by default until you explicitly opt in.",
-  "Dev Phone is useful for demos, but it can overwrite number webhooks; use a spare number.",
-  "Chat with Twilio uses the local model plus a Twilio-aware system prompt from the skills index.",
-  "Agent Skills are plain SKILL.md files, so compatible agents can read them without a custom plugin.",
-  "The local model server exposes an OpenAI-compatible endpoint for tools that can use one.",
-  "For small local models, focused tool sets are usually better than exposing every possible tool.",
+  "This toolkit installs Twilio Skills so compatible coding agents can reason through Twilio product choices.",
+  "Chat with Twilio runs locally; the model uses a Twilio-aware prompt built from the toolkit's Skills index.",
+  "Configure agent wires the same Twilio Skills and MCP choices into Claude, Codex, Cursor, OpenCode, Pi, and more.",
+  "Docs MCP is read-only and searchable; it helps agents pull current Twilio API details without account credentials.",
+  "Execute MCP is opt-in because it can call real Twilio APIs using credentials you explicitly create.",
+  "The toolkit saves Execute MCP credentials in .toolkit/.env with chmod 600 and never prints the secret to the log.",
+  "Dev Phone is handy for demos, but it can overwrite phone-number webhooks; use a spare Twilio number.",
+  "The local model server exposes an OpenAI-compatible endpoint for other tools at the configured model port.",
+  "Model thinking is off by default for speed; toggle it from the Chat menu when you want slower, more deliberate replies.",
+  "Setup can resume large model downloads, so rerunning it should not throw away a partial Gemma archive.",
+  "The Setup menu reflects completed installs, so checked items stay visible after you return to the dashboard.",
+  "Use ./toolkit doctor when first-run behavior looks odd; it checks terminal, Node, submodule, disk, and model state.",
 ];
 
 export function twilioFactAt(index: number): string {

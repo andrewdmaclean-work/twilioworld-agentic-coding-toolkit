@@ -335,6 +335,7 @@ Gemini CLI, JetBrains Junie, and 30+ more.
 ./toolkit                   # choose "Chat with Twilio" or "Model server"
 MODEL_SERVER_PORT=8082 ./toolkit  # avoid a local 8080 conflict
 CTX_SIZE=65536 ./toolkit    # even more headroom for long multi-tool sessions
+MODEL_REASONING=on ./toolkit      # enable Gemma thinking; default is off
 ```
 
 Powered by [llamafile](https://github.com/mozilla-ai/llamafile) (Mozilla) — a single
@@ -414,10 +415,12 @@ The full chain (web UI → CORS proxy → bridge → Twilio) completes a real MC
 > experimental. If a future llamafile ships with OpenSSL, the bridge becomes
 > unnecessary and the config can point straight at `https://mcp.twilio.com/docs`.
 
-The in-app chat starts the local server with reasoning disabled and supports a small
-safe tool surface for toolkit introspection: local status, install choices, and
-local Twilio Skill listing. It does **not** call real Twilio APIs from chat; use
-the Execute MCP in a configured agent for that.
+The in-app chat starts the local server with reasoning disabled by default and
+supports a small safe tool surface for toolkit introspection: local status,
+install choices, and local Twilio Skill listing. It does **not** call real
+Twilio APIs from chat; use the Execute MCP in a configured agent for that.
+Turn thinking on for a run with `MODEL_REASONING=on ./toolkit`; use
+`MODEL_REASONING=auto` to let the model template decide.
 
 **Memory footprint:** the model runs with a 32 768-token context window and a
 quantized KV cache (`q4_0`), keeping runtime RAM around **~3-3.5 GB** (the

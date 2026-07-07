@@ -4,6 +4,7 @@
 
 import { existsSync } from "fs";
 import { capture } from "./exec.ts";
+import { modelReasoningMode, type ModelReasoningMode } from "./config.ts";
 import { writeWebUiConfig } from "./webui-config.ts";
 import {
   GGUF_DEST,
@@ -29,7 +30,15 @@ function validDigits(raw: string | undefined, fallback: string): string {
   return raw && /^[0-9]+$/.test(raw) ? raw : fallback;
 }
 
+function validReasoning(raw: string | undefined): ModelReasoningMode | null {
+  if (raw === "off") return "off";
+  return raw === "on" || raw === "auto" ? raw : "off";
+}
+
 const CTX_SIZE = validDigits(process.env.CTX_SIZE, "32768");
+export const MODEL_REASONING = process.env.MODEL_REASONING
+  ? validReasoning(process.env.MODEL_REASONING) ?? "off"
+  : modelReasoningMode();
 const PORT = MODEL_SERVER_PORT;
 
 export { LLAMAFILE_DEST };
@@ -61,12 +70,10 @@ function baseModelArgs(): string[] {
     "--flash-attn", "on",
     "--cache-type-k", "q4_0",
     "--cache-type-v", "q4_0",
-    // Reasoning enabled: Pi (and the in-TUI chat) can think before answering.
-    // 'auto' lets the model's chat template decide; -1 budget = unrestricted.
-    // The in-TUI chat strips <think> blocks from its rendered output, so it
-    // stays terse for the user while still letting the model reason.
-    "--reasoning", "auto",
-    "--reasoning-budget", "-1",
+    // Disable thinking by default. On Pi-class CPUs reasoning can spend a long
+    // time in <think> before producing a useful answer. Override per run with
+    // MODEL_REASONING=on or MODEL_REASONING=auto.
+    "--reasoning", MODEL_REASONING,
   ];
   if (existsSync(GGUF_MMPROJ)) args.push("--mmproj", GGUF_MMPROJ);
   return args;

@@ -27,6 +27,7 @@ import { buildCredsPromptScreen } from "./screens/creds-prompt.ts";
 import { loadToolkitEnv } from "./lib/env.ts";
 import { runUninstall, type UninstallKey } from "./lib/uninstall.ts";
 import { buildInvadersScreen } from "./screens/invaders.ts";
+import { modelReasoningMode, setModelReasoningMode, type ModelReasoningMode } from "./lib/config.ts";
 import {
   LLAMAFILE_DEST, LOCAL_MODEL_SIZE_LABEL, ROOT, MODEL_SERVER_PORT, MODEL_SERVER_URL, CONFIG_FILE,
 } from "./lib/constants.ts";
@@ -148,6 +149,16 @@ function headlineText(s: ToolkitStatus | null): string {
   const model = s?.model.running ? "model online" : s?.model.ready ? "model ready" : "model not downloaded";
   const twilio = s?.twilio.sid ? `Twilio ${s.twilio.profile}` : "Twilio not logged in";
   return [model, twilio].filter(Boolean).join("  |  ");
+}
+
+function modelReasoningLabel(mode: ModelReasoningMode): string {
+  if (mode === "on") return "On";
+  if (mode === "auto") return "Auto";
+  return "Off";
+}
+
+function nextModelReasoningMode(mode: ModelReasoningMode): ModelReasoningMode {
+  return mode === "off" ? "on" : "off";
 }
 
 // ── Status panel lines — installed + running, only what's present ────
@@ -709,6 +720,7 @@ async function main() {
         // Local Gemma is the only way to chat. If it isn't downloaded,
         // the submenu's actions offer to download it instead of dead-ending.
         const ready = () => { const r = modelReady(); return r.runtime && r.weights; };
+        const reasoningMode = modelReasoningMode();
 
         const startBrowser = () => {
           startMcpProxy();
@@ -729,6 +741,23 @@ async function main() {
 	          subtitle: "Local AI chat. Escape returns to dashboard.",
 	          bodyTitle: "Chat",
 	          options: [
+	            {
+	              name: `Model thinking: ${modelReasoningLabel(reasoningMode)}`,
+	              description: reasoningMode === "off"
+	                ? "faster local replies; press Enter to turn thinking on"
+	                : "slower but more deliberate replies; press Enter to turn thinking off",
+	              onSelect: () => {
+	                const next = nextModelReasoningMode(reasoningMode);
+	                setModelReasoningMode(next);
+	                const stopped = stopModelServer();
+	                flash(
+	                  `Model thinking ${modelReasoningLabel(next).toLowerCase()}${stopped ? " — server stopped; restart chat to apply" : " — applies on next server start"}`,
+	                  GREEN,
+	                );
+	                setTimeout(() => poll(), 500);
+	                return true;
+	              },
+	            },
 	            {
 	              name: doneLabel(Boolean(latestStatus?.model.ready), "In the TUI"),
 	              description: latestStatus?.model.ready
