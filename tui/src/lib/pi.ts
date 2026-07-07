@@ -3,17 +3,18 @@
 // brand-new terminal window, fully detached from the TUI. The dashboard
 // keeps running normally — no suspend/resume needed.
 
-import { copyFileSync, existsSync, mkdirSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join } from "path";
 import { capture, fileExecutable, have, openInNewWindow, runStreaming, startDaemon, type LogFn, type NewWindowResult } from "./exec.ts";
 import { addonEnabled } from "./config.ts";
 import {
   GGUF_DEST,
-    GGUF_MIN_BYTES,
-    LLAMAFILE_DEST,
-    MODEL_SERVER_LOG,
-    MODEL_SERVER_PORT,
-    MODEL_SERVER_URL,
+  GGUF_MIN_BYTES,
+  LLAMAFILE_DEST,
+  MODEL_SERVER_BASE_URL,
+  MODEL_SERVER_LOG,
+  MODEL_SERVER_PORT,
+  MODEL_SERVER_URL,
   PI_AGENT_DIR,
   PI_MODELS_JSON,
   PI_ROUTING_PROMPT,
@@ -47,6 +48,19 @@ export function isModelServerRunning(): boolean {
   try { return Boolean(capture("curl", ["-fsS", MODEL_SERVER_URL])); } catch { return false; }
 }
 
+function writePiModelsConfig(piDir: string): void {
+  const raw = readFileSync(PI_MODELS_JSON, "utf8");
+  const config = JSON.parse(raw) as {
+    providers?: Record<string, { baseUrl?: string } & Record<string, unknown>>;
+  };
+  const providers = config.providers ?? {};
+  const llamafile = providers.llamafile ?? {};
+  llamafile.baseUrl = `${MODEL_SERVER_BASE_URL}/v1`;
+  providers.llamafile = llamafile;
+  config.providers = providers;
+  writeFileSync(join(piDir, "models.json"), `${JSON.stringify(config, null, 2)}\n`);
+}
+
 export type PiReadiness =
   | { ok: false; reason: string }
   | { ok: true };
@@ -74,7 +88,7 @@ export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult>
 
   // Model config
   if (localGemmaAvailable() && existsSync(PI_MODELS_JSON)) {
-    copyFileSync(PI_MODELS_JSON, join(piDir, "models.json"));
+    writePiModelsConfig(piDir);
   }
 
   // MCP adapter + config — Docs MCP always, Execute MCP if creds exist.

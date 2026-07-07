@@ -6,7 +6,7 @@
 # desktop* — Debian bookworm (the release Pi OS 12 is built on) plus the
 # official Raspberry Pi PIXEL desktop metapackage from Raspberry Pi's own
 # apt archive. arm64-native on Apple Silicon, streamed to a browser via
-# noVNC, and meant to be run capped to Pi 4 resources (see README).
+# noVNC, and meant to be run capped to a Pi 5-style 8GB setup (see README).
 #
 # Supply chain: two sources only, both first-party and both signed —
 #   - official debian:bookworm base image + Debian's own apt repos
@@ -15,7 +15,7 @@
 # No community images, no curl|bash app installers baked in.
 #
 # Build: docker build -t toolkit-raspbian -f demo/raspbian/Dockerfile demo/raspbian
-# Run:   see demo/raspbian/README.md (includes the Pi 4 resource caps)
+# Run:   see demo/raspbian/README.md (includes the Pi 5-style resource caps)
 
 FROM debian:bookworm
 
@@ -106,7 +106,7 @@ ENV LANG=en_US.UTF-8 \
 
 # noVNC owns :8080 in this desktop container. Run the local llamafile server
 # on a separate loopback port, and keep the context smaller so the model has a
-# realistic chance under the Pi 4-style 4GB memory cap plus desktop overhead.
+# realistic chance under Pi-style memory caps plus desktop overhead.
 ENV MODEL_SERVER_PORT=8082 \
     CTX_SIZE=8192
 

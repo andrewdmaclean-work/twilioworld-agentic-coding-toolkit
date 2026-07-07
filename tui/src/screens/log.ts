@@ -32,6 +32,7 @@ function isDismissKey(args: unknown[]): boolean {
 
 function colorFor(line: string, stream: "stdout" | "stderr"): string {
   if (line.startsWith("✓")) return THEME.green;
+  if (line.startsWith("☑")) return THEME.green;
   if (line.startsWith("✗")) return ERR_COLOR;
   if (line.startsWith("⚠")) return THEME.yellow;
   if (line.startsWith("▶")) return THEME.red;

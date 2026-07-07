@@ -1,7 +1,7 @@
-# "Raspbian" Desktop in a Container (Pi 4 resource-capped)
+# "Raspbian" Desktop in a Container (Pi 5-style 8GB)
 
 The Raspberry Pi PIXEL desktop, streamed to your browser via noVNC, running
-capped to Pi 4 resources (4GB RAM, 4 CPU cores). You get the authentic
+capped to a realistic Pi 5-style setup (8GB RAM, 4 CPU cores). You get the authentic
 Raspbian look-and-feel to `git clone` the repo and run `./toolkit` on camera,
 fully isolated from your Mac.
 
@@ -26,10 +26,10 @@ No community images, no `curl | bash` app installers baked in. (As with the
 other images, `./toolkit` itself bootstraps bun from bun.sh at runtime, since
 Debian ships Node 18 and the toolkit needs >=22.)
 
-## Run it — Pi 4 (4GB / 4 cores)
+## Run it — Pi 5-style (8GB / 4 cores)
 
     docker run -d --name toolkit-raspbian \
-      --memory=4g --memory-swap=4g --cpus=4.0 --shm-size=256m \
+      --memory=8g --memory-swap=8g --cpus=4.0 --shm-size=512m \
       -p 127.0.0.1:8081:8080 toolkit-raspbian
 
 Then open in your Mac's browser:
@@ -44,22 +44,23 @@ exposing a passwordless desktop to the internet:
 
     ssh -L 8081:127.0.0.1:8081 user@remote-vm
 
-Other Pi specs — just change the caps:
-- Pi 3 / Zero 2:  `--memory=1g --memory-swap=1g --cpus=1.0`
-- Pi 4 (2GB):     `--memory=2g --memory-swap=2g --cpus=4.0`
-- Pi 5 (8GB):     `--memory=8g --memory-swap=8g --cpus=4.0`
+Other Pi-style caps if you want to show constraints:
+- Pi 3 / Zero 2:       `--memory=1g --memory-swap=1g --cpus=1.0`
+- Pi 4-style (2GB):    `--memory=2g --memory-swap=2g --cpus=4.0`
+- Pi 4-style (4GB):    `--memory=4g --memory-swap=4g --cpus=4.0 --shm-size=256m`
+- Pi 5-style (8GB):    `--memory=8g --memory-swap=8g --cpus=4.0 --shm-size=512m`
 
 `--memory-swap` = `--memory` means no swap beyond RAM, so the container feels
 the RAM ceiling exactly like real hardware (no host swap masking it).
 
 Inside this container, noVNC owns port 8080. The toolkit image sets the local
 model server to `127.0.0.1:8082` and a smaller context window by default so
-llamafile does not collide with noVNC or immediately exhaust a 4GB cap.
+llamafile does not collide with noVNC and has realistic room alongside the desktop.
 
 ## Share a host folder in (optional, read-only)
 
     docker run -d --name toolkit-raspbian \
-      --memory=4g --memory-swap=4g --cpus=4.0 --shm-size=256m \
+      --memory=8g --memory-swap=8g --cpus=4.0 --shm-size=512m \
       -p 127.0.0.1:8081:8080 -v "$HOME/Desktop/demo-folder:/demo_files:ro" \
       toolkit-raspbian
 
@@ -107,5 +108,5 @@ Default login inside the desktop if ever prompted: user `pi` / password
 
 - Port is mapped to 8081 here so it doesn't clash with the XFCE desktop
   image (8080). Use whichever you like.
-- `--shm-size=256m` keeps shared memory Pi-realistic while still enough for
+- `--shm-size=512m` keeps shared memory Pi-realistic while still enough for
   the desktop to render (too low = gray screen).

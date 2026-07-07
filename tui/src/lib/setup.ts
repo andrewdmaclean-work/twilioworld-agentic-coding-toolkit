@@ -36,6 +36,7 @@ function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
+function stepDone(msg: string, onLog: LogFn) { onLog(`☑ ${msg}`, "stdout"); }
 
 function sizeLabel(bytes: number): string {
   if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(0)} KB`;
@@ -182,7 +183,7 @@ export async function runSetup(opts: {
   process.umask(0o077);
 
   // ── Step 1: Prerequisites ──────────────────────────────────────────
-  step("[1/6] Checking prerequisites", onLog);
+  step("☐ [1/6] Checking prerequisites", onLog);
   let missing = false;
   for (const tool of ["node", "git", "curl"]) {
     if (have(tool)) {
@@ -194,9 +195,10 @@ export async function runSetup(opts: {
     }
   }
   if (missing) { onDone(false); return; }
+  stepDone("[1/6] Checking prerequisites", onLog);
 
   // ── Step 2: Twilio CLI ─────────────────────────────────────────────
-  step("[2/6] Twilio CLI", onLog);
+  step("☐ [2/6] Twilio CLI", onLog);
   if (have("twilio")) {
     ok(`twilio CLI  ${capture("twilio", ["--version"]).split("\n")[0]}`, onLog);
   } else if (addonEnabled("devPhone")) {
@@ -208,6 +210,7 @@ export async function runSetup(opts: {
     warn("Twilio CLI not installed — not needed for your selected choices", onLog);
     say("   (Install it later if you want the Execute MCP or Dev Phone.)", onLog);
   }
+  stepDone("[2/6] Twilio CLI", onLog);
 
   // ── Twilio account (optional — only needed for Execute MCP) ────────
   let activeAccountSid = "";
@@ -239,7 +242,7 @@ export async function runSetup(opts: {
   }
 
   // ── Step 3: API key for Execute MCP ───────────────────────────────
-  step("[3/6] Execute MCP API key (optional)", onLog);
+  step("☐ [3/6] Execute MCP API key (optional)", onLog);
   let mcpCreds = "";
   if (!activeAccountSid) {
     warn("Not logged in to Twilio CLI — skipping Execute MCP.", onLog);
@@ -287,9 +290,10 @@ export async function runSetup(opts: {
       }
     }
   }
+  stepDone("[3/6] Execute MCP API key (optional)", onLog);
 
   // ── Step 4: Local model ────────────────────────────────────────────
-  step("[4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
+  step("☐ [4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
   if (!addonEnabled("localGemma")) {
     warn("Local Gemma not selected — skipping", onLog);
   } else if (runtimeOk() && ggufSizeOk()) {
@@ -383,9 +387,10 @@ export async function runSetup(opts: {
       }
     }
   }
+  stepDone("[4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
 
   // ── Step 5: Dev Phone ──────────────────────────────────────────────
-  step("[5/6] Dev Phone", onLog);
+  step("☐ [5/6] Dev Phone", onLog);
   if (!addonEnabled("devPhone")) {
     warn("Dev Phone not selected — skipping", onLog);
   } else if (!have("twilio")) {
@@ -401,9 +406,10 @@ export async function runSetup(opts: {
     }
     warn("Dev Phone OVERWRITES a number's webhooks — use a spare number, not production.", onLog);
   }
+  stepDone("[5/6] Dev Phone", onLog);
 
   // ── Step 6: Skills ─────────────────────────────────────────────────
-  step("[6/6] Twilio Skills", onLog);
+  step("☐ [6/6] Twilio Skills", onLog);
   const skillsReadme = join(ROOT, "vendor", "twilio-ai", "skills", "README.md");
   if (!existsSync(skillsReadme)) {
     say("   Pulling skills (git submodule)…", onLog);
@@ -427,6 +433,7 @@ export async function runSetup(opts: {
     if (res.ok) ok("Skills installed globally to ~/.agents/skills/", onLog);
     else warn("Global skills copy failed — skills available in this repo only", onLog);
   }
+  stepDone("[6/6] Twilio Skills", onLog);
 
   // ── Verify ─────────────────────────────────────────────────────────
   if (activeAccountSid) {

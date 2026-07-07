@@ -24,7 +24,7 @@ const AGENT_OPTIONS = [
 
 export function buildAgentScreen(
   renderer: CliRenderer,
-  onFinished: () => void,
+  onFinished: (ok?: boolean) => void,
   onCancel: () => void,
 ): BoxRenderable {
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
@@ -60,7 +60,7 @@ export function buildAgentScreen(
       renderer,
       `Configure agent — ${agentValue}`,
       (onLog, onDone) => configureAgent({ agent: agentValue, onLog, onDone }),
-      () => onFinished(),
+      (ok) => onFinished(ok),
     );
     removeAllChildren(screen);
     screen.add(logScreen);

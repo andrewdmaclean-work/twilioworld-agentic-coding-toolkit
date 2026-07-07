@@ -17,11 +17,22 @@ import { buildAgentScreen } from "./agent.ts";
 import { downloadLocalModel, installDevPhone } from "../lib/actions.ts";
 import { writeConfig, readConfig } from "../lib/config.ts";
 import { LOCAL_MODEL_SIZE_LABEL } from "../lib/constants.ts";
+import { modelReady } from "../lib/model.ts";
+import { capture, have } from "../lib/exec.ts";
 
 /** Persist config so onboarding is considered "done" and never auto-runs. */
 function markOnboarded(): void {
   const cfg = readConfig();
-  writeConfig(cfg.addons);
+  writeConfig(cfg.addons, cfg.settings);
+}
+
+function doneLabel(done: boolean, label: string): string {
+  return `${done ? "☑" : "☐"} ${label}`;
+}
+
+function devPhoneReady(): boolean {
+  if (!have("twilio")) return false;
+  return capture("twilio", ["plugins"]).includes("plugin-dev-phone");
 }
 
 export function buildOnboardingScreen(
@@ -36,9 +47,14 @@ export function buildOnboardingScreen(
     flexGrow: 1,
     flexDirection: "column",
   });
+  const completed = { devPhone: false, localChat: false, agent: false };
 
   function showMenu(): void {
     removeAllChildren(host);
+    const model = modelReady();
+    const devPhoneDone = completed.devPhone || devPhoneReady();
+    const localChatDone = completed.localChat || (model.runtime && model.weights);
+    const agentDone = completed.agent;
     const menu = buildSubmenuScreen(renderer, {
       id: "onboarding-menu",
       route: "Welcome",
@@ -47,18 +63,18 @@ export function buildOnboardingScreen(
       bodyTitle: "First-time setup",
       options: [
         {
-          name: "1 · Twilio CLI + Dev Phone",
-          description: "install the CLI and the browser soft phone (real SMS + voice)",
-          onSelect: () => { runStep("Twilio CLI + Dev Phone", (l, d) => installDevPhone({ onLog: l, onDone: d })); return false; },
+          name: doneLabel(devPhoneDone, "1 · Twilio CLI + Dev Phone"),
+          description: devPhoneDone ? "done" : "install the CLI and the browser soft phone (real SMS + voice)",
+          onSelect: () => { runStep("devPhone", "Twilio CLI + Dev Phone", (l, d) => installDevPhone({ onLog: l, onDone: d })); return false; },
         },
         {
-          name: `2 · Local AI chat (Gemma, ~${LOCAL_MODEL_SIZE_LABEL})`,
-          description: "download the offline model so Chat with Twilio Docs works",
-          onSelect: () => { runStep("Local AI chat (Gemma)", (l, d) => downloadLocalModel({ onLog: l, onDone: d })); return false; },
+          name: doneLabel(localChatDone, `2 · Local AI chat (Gemma, ~${LOCAL_MODEL_SIZE_LABEL})`),
+          description: localChatDone ? "done" : "download the offline model so Chat with Twilio Docs works",
+          onSelect: () => { runStep("localChat", "Local AI chat (Gemma)", (l, d) => downloadLocalModel({ onLog: l, onDone: d })); return false; },
         },
         {
-          name: "3 · Configure a coding agent",
-          description: "wire Twilio Skills + Docs MCP into Pi, Claude Code, Cursor, Codex…",
+          name: doneLabel(agentDone, "3 · Configure a coding agent"),
+          description: agentDone ? "done" : "wire Twilio Skills + Docs MCP into Pi, Claude Code, Cursor, Codex…",
           onSelect: () => { showAgent(); return false; },
         },
         {
@@ -72,16 +88,23 @@ export function buildOnboardingScreen(
   }
 
   function runStep(
+    key: "devPhone" | "localChat",
     title: string,
     run: (onLog: (l: string, s: "stdout" | "stderr") => void, onDone: (ok: boolean) => void) => void | Promise<void>,
   ): void {
     removeAllChildren(host);
-    host.add(buildLogScreen(renderer, title, run, () => showMenu()));
+    host.add(buildLogScreen(renderer, title, run, (ok) => {
+      if (ok) completed[key] = true;
+      showMenu();
+    }));
   }
 
   function showAgent(): void {
     removeAllChildren(host);
-    host.add(buildAgentScreen(renderer, () => showMenu(), () => showMenu()));
+    host.add(buildAgentScreen(renderer, (ok) => {
+      if (ok) completed.agent = true;
+      showMenu();
+    }, () => showMenu()));
   }
 
   showMenu();

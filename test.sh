@@ -144,7 +144,9 @@ check "model port is configurable end-to-end" bash -c '
   grep -q "MODEL_SERVER_BASE_URL" tui/src/lib/constants.ts &&
   grep -q "MODEL_SERVER_PORT" tui/src/lib/model.ts &&
   grep -q "MODEL_SERVER_PORT" tui/src/lib/exec.ts &&
-  grep -q "MODEL_SERVER_PORT" tui/src/screens/chat.ts
+  grep -q "MODEL_SERVER_PORT" tui/src/screens/chat.ts &&
+  grep -q "MODEL_SERVER_BASE_URL" tui/src/lib/pi.ts &&
+  grep -q "writePiModelsConfig" tui/src/lib/pi.ts
 '
 check "local model size copy is current" bash -c '
   grep -q "LOCAL_MODEL_SIZE_LABEL = \"3.3GB\"" tui/src/lib/constants.ts &&
@@ -166,6 +168,23 @@ check "setup menu reflects completed installs" bash -c '
   grep -q "modelReady" tui/src/screens/setup.ts &&
   grep -q "devPhoneInstalled" tui/src/screens/setup.ts &&
   grep -q "item.done" tui/src/screens/setup.ts
+'
+check "setup progress shows completed steps" bash -c '
+  grep -q "stepDone" tui/src/lib/setup.ts &&
+  [ "$(grep -c "step(\"☐ \\[" tui/src/lib/setup.ts)" -eq 6 ] &&
+  [ "$(grep -c "stepDone(\"\\[" tui/src/lib/setup.ts)" -eq 6 ] &&
+  grep -q "☐ \\[1/6\\] Checking prerequisites" tui/src/lib/setup.ts &&
+  grep -q "stepDone(\"\\[6/6\\] Twilio Skills\"" tui/src/lib/setup.ts &&
+  grep -q "line.startsWith(\"☑\")" tui/src/screens/log.ts
+'
+check "onboarding checklist reflects completed steps" bash -c '
+  grep -q "doneLabel" tui/src/screens/onboarding.ts &&
+  grep -q "☑" tui/src/screens/onboarding.ts &&
+  grep -q "☐" tui/src/screens/onboarding.ts &&
+  grep -q "devPhoneReady" tui/src/screens/onboarding.ts &&
+  grep -q "modelReady" tui/src/screens/onboarding.ts &&
+  grep -q "completed.agent" tui/src/screens/onboarding.ts &&
+  grep -q "onFinished(ok" tui/src/screens/agent.ts
 '
 check "chat stays inside OpenTUI"     bash -c 'grep -q "buildChatScreen" tui/src/index.ts && ! grep -RIn "combinedArgs\\|chatArgs\\|--chat" tui/src 2>/dev/null'
 check "chat enter sends message"      bash -c 'grep -q "InputRenderableEvents.ENTER" tui/src/screens/chat.ts && ! grep -q "input.onSubmit" tui/src/screens/chat.ts'
@@ -323,6 +342,12 @@ check "demo desktops include process diagnostics" bash -c '
   grep -q "iproute2" demo/desktop/Dockerfile
 '
 check "raspbian noVNC binds localhost by default" grep -q '127.0.0.1:8081:8080' demo/raspbian/README.md
+check "raspbian demo defaults to Pi 5-style 8GB" bash -c '
+  grep -q "Pi 5-style (8GB / 4 cores)" demo/raspbian/README.md &&
+  grep -q "\-\-memory=8g --memory-swap=8g" demo/raspbian/README.md &&
+  grep -q "\-\-shm-size=512m" demo/raspbian/README.md &&
+  grep -q "Pi 5-style 8GB setup" demo/raspbian/Dockerfile
+'
 check "M-2 umask set in setup"        grep -q 'process.umask' tui/src/lib/setup.ts
 check "L-1 pi package version pinned" grep -q 'PI_AGENT_PKG = "@earendil-works/pi-coding-agent@' tui/src/lib/constants.ts
 
