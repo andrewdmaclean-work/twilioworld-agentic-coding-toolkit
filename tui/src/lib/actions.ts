@@ -26,7 +26,7 @@ export async function installTwilioCli(opts: { onLog: LogFn; onDone: (ok: boolea
   const { onLog, onDone } = opts;
   step("Toolkit-local Twilio CLI", onLog);
   if (have("twilio")) { ok(`Already installed  ${capture("twilio", ["--version"]).split("\n")[0]}`, onLog); onDone(true); return; }
-  if (!have("npm")) { err("npm not found — install Node.js first.", onLog); onDone(false); return; }
+  if (!have("npm")) { err("Toolkit-local npm not found — re-run ./toolkit so it can repair .toolkit/toolchains/node-v22.", onLog); onDone(false); return; }
   const res = await runStreaming("npm", ["install", "--prefix", NPM_GLOBAL_PREFIX, "-g", "twilio-cli"], { cwd: ROOT, onLog });
   if (res.ok) {
     ok(`Twilio CLI installed under ${NPM_GLOBAL_PREFIX}`, onLog);
@@ -104,10 +104,9 @@ export function stopModelServer(): boolean {
 }
 
 // ── Execute MCP (experimental) ───────────────────────────────────────
-// Creates a scoped Twilio API key so agents can call real Twilio APIs,
+// Creates a restricted Twilio API key so agents can read selected Twilio APIs,
 // and writes it to .toolkit/.env (chmod 600, gitignored, never printed).
-// This is the one risky capability — it can send messages, make calls,
-// and delete resources — so it's opt-in and lives under the Twilio CLI hub.
+// It is still opt-in because it lets agents inspect live account data.
 
 export function activeAccountSid(): string {
   try {
@@ -126,7 +125,7 @@ function looksLikeMcpCreds(creds: string): boolean {
   return /^AC[a-fA-F0-9]{32}\/SK[a-fA-F0-9]{32}:.+$/.test(creds);
 }
 
-// Read-only restricted-key policy for the TwilioWorld puzzle/demo account.
+// Read-only restricted-key policy for the TwilioWorld account.
 // The v1 Keys API takes a Policy of the form { "allow": ["/twilio/.../read"] }.
 // These are Twilio restricted-key permission strings, not raw REST URLs.
 function readOnlyAllowList(): string[] {

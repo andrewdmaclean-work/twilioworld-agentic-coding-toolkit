@@ -34,9 +34,9 @@ cd twilioworld-agentic-coding-toolkit
 > Forgot it? Setup (in the menu) runs `git submodule update --init` for you.
 
 If the first run behaves strangely, `./toolkit doctor` prints a read-only
-environment check: terminal/locale, required commands, Node version, submodule
-state, write access, disk space, and whether the local model/runtime are
-already installed.
+environment check: terminal/locale, required host commands, project-local
+Bun/Node/Twilio CLI paths, submodule state, write access, disk space, and
+whether the local model/runtime are already installed.
 
 `./toolkit` is the command you use from the repo root. Arrow keys to navigate.
 The dashboard is a two-column OpenTUI app: actions on the left, status and
@@ -101,6 +101,12 @@ local model is also detected from the actual `models/gemma4-e2b.gguf` and
 `tools/llamafile` files, so resetting `.toolkit/` does not make a downloaded model
 disappear from the menu.
 
+Toolkit-owned runtimes and CLIs are isolated under this repo. `./toolkit` installs
+and prefers `.toolkit/toolchains/bun/`, `.toolkit/toolchains/node-v22/`,
+`.toolkit/npm-global/`, and `.toolkit/twilio-cli-home/` for its own subprocesses.
+That means a system Twilio CLI, Node, Bun, or Twilio profile elsewhere on the
+machine is not used or modified by the toolkit.
+
 ---
 
 ## What's in the toolkit
@@ -109,7 +115,7 @@ disappear from the menu.
 | --- | --- |
 | **Twilio Skills** | 48+ skill files that teach your agent which Twilio product to use, in what order, and what to avoid. |
 | **Docs MCP** | Your agent searches the live Twilio API surface (1,800+ endpoints) and pulls exact schemas. No auth. |
-| **Execute MCP** *(experimental)* | Your agent **calls real Twilio APIs** — "send a text to my phone" just works. Uses a scoped API key. |
+| **Execute MCP** *(experimental)* | Your agent can inspect selected live Twilio APIs through a restricted, read-only API key. No send/create/update/delete permission is granted. |
 | **Gemma 4 E2B (local)** | A free, offline model via [llamafile](https://github.com/mozilla-ai/llamafile). Serves an OpenAI-compatible API on `:8080` by default — powers in-app chat and, if selected, Pi. |
 | **Twilio CLI** | The command line to all things Twilio, logged in and ready. |
 | **Dev Phone** | A browser soft phone — make/receive real SMS + voice with no physical device. |
@@ -127,7 +133,7 @@ what gets installed locally and what gets attached when you configure an agent:
 | Local Gemma model | Required for Chat with Twilio; also serves `http://127.0.0.1:8080/v1` by default for other tools (including Pi) | ✓ on |
 | Twilio Skills for agents | Installs Twilio Skills where coding agents can find them | ✓ on |
 | Docs MCP for agents | Adds searchable live Twilio API reference to configured agents | ✓ on |
-| Execute MCP for agents | Lets configured agents call real Twilio APIs | off |
+| Execute MCP for agents | Lets configured agents read selected live Twilio APIs through a restricted key | off |
 | Dev Phone | Browser SMS/voice test phone | off |
 
 There's no "which agent do I use" setup choice — that's not a machine-wide setting,
@@ -141,20 +147,22 @@ pitfalls; Docs MCP retrieves current endpoint schemas and documentation details.
 
 ## Prerequisites
 
-- **Node.js**, **git**, **curl** (the script checks these)
+- **git**, **curl**, and standard archive tools (`tar`/`unzip`)
 - A **Twilio account** (only needed for Execute MCP and Dev Phone)
 - ~3.3 GB free disk if you want the local Gemma model
 
-The toolkit can install isolated toolkit-local Bun/Node toolchains, Twilio CLI, Dev Phone plugin, supported agent CLIs,
-llamafile runtime, and local Gemma model files when those choices are selected.
+The toolkit installs isolated toolkit-local Bun/Node toolchains, Twilio CLI,
+Dev Phone plugin, llamafile runtime, and local Gemma model files when those
+choices are selected. External coding-agent CLIs may still use their native
+installers, but toolkit-owned Node/Bun/Twilio CLI state stays in `.toolkit/`.
 
 ---
 
 ## What the setup does
 
-1. **Prerequisites** — verifies git/curl and uses project-local Bun + Node from `.toolkit/toolchains/`.
+1. **Prerequisites** — verifies host basics and uses project-local Bun + Node from `.toolkit/toolchains/`.
 2. **Twilio CLI** — installs a toolkit-local copy under `.toolkit/npm-global` if needed for Execute MCP or Dev Phone, then checks for an active login in `.toolkit/twilio-cli-home`.
-3. **API key** — mints a scoped key via `twilio api:core:keys:create` for the Execute MCP, so your root Auth Token never lands in a config string.
+3. **Execute MCP key** — does not mint credentials automatically. Use **Twilio CLI → Enable Execute MCP (read-only)** to create a restricted key for Messaging logs, Conversation Intelligence, Enterprise Knowledge, and Custom Operators.
 4. **Local model** — downloads the llamafile runtime + Gemma 4 E2B weights only if selected.
 5. **Dev Phone** — installs the plugin only if selected.
 6. **Skills** — initializes the submodule and installs skills globally if the agent Skills choice is enabled.
@@ -417,7 +425,8 @@ The full chain (web UI → CORS proxy → bridge → Twilio) completes a real MC
 The in-app chat starts the local server with reasoning disabled by default and
 supports a small safe tool surface for toolkit introspection: local status,
 install choices, and local Twilio Skill listing. It does **not** call real
-Twilio APIs from chat; use the Execute MCP in a configured agent for that.
+Twilio APIs from chat; use the restricted Execute MCP in a configured agent for
+read-only account inspection.
 Turn thinking on for a run with `MODEL_REASONING=on ./toolkit`; use
 `MODEL_REASONING=auto` to let the model template decide.
 
@@ -442,9 +451,11 @@ point OpenCode/Cursor at a cloud model for that.
 ## Cheat sheet
 
 ```bash
-twilio dev-phone        # browser soft phone — USE A SPARE NUMBER (overwrites webhooks)
 ./toolkit               # run Gemma 4 E2B locally from the menu
-twilio --help           # explore the CLI
+./toolkit doctor        # verify project-local runtimes, paths, model, and repo state
+# From ./toolkit → Twilio CLI → Open terminal:
+twilio dev-phone        # browser soft phone — USE A SPARE NUMBER (overwrites webhooks)
+twilio --help           # explore the isolated toolkit-local CLI
 ```
 
 ---
@@ -461,7 +472,7 @@ container. The footprint is small and fully reversible:
 | Toolkit-local Twilio CLI | `.toolkit/npm-global/` | `uninstall.sh` |
 | Toolkit-local Twilio CLI profiles/plugins | `.toolkit/twilio-cli-home/` | `uninstall.sh` |
 | Dev Phone plugin | toolkit-local Twilio CLI plugins | `uninstall.sh` |
-| Scoped API key | your Twilio account | `uninstall.sh` |
+| Restricted read-only API key | your Twilio account | `uninstall.sh` |
 | Skills copy | `~/.agents/skills/twilio/`, `~/.agents/skills/sendgrid/` | `uninstall.sh` |
 | Local toolkit copy of Skills | `vendor/twilio-ai/skills/` | `uninstall.sh` |
 | Local config + Execute MCP creds | `.toolkit/config.json`, `.toolkit/.env` | `uninstall.sh` |
@@ -475,7 +486,7 @@ container. The footprint is small and fully reversible:
 The toolkit does not read or mutate your normal system Twilio CLI profile. Its
 login, profiles, cache, and plugins live under `.toolkit/twilio-cli-home/`.
 
-> Want full isolation anyway? Run the repo inside a devcontainer/VM — but note
+> Want OS-level isolation too? Run the repo inside a devcontainer/VM — but note
 > Dev Phone needs browser + port access and llamafile won't get GPU acceleration
 > in Docker on macOS, so the host-native path is recommended.
 
@@ -489,18 +500,23 @@ login, profiles, cache, and plugins live under `.toolkit/twilio-cli-home/`.
 ```
 
 `./test.sh` runs in CI on every push (see `.github/workflows/test.yml`). It needs
-no Twilio account — login, key-minting, and live API calls are exercised only when
-you run Setup with Execute MCP or Dev Phone selected.
+no Twilio account — login, restricted key creation, and live API checks are
+exercised only when you use the Twilio CLI hub actions for Execute MCP or Dev
+Phone.
 
 ---
 
 ## Notes & caveats
 
-- **Execute MCP is experimental** (Twilio Alpha). Great for building, pre-GA.
+- **Execute MCP is experimental** (Twilio Alpha). The toolkit creates a
+  restricted read-only key for selected clue surfaces only: Messaging logs,
+  Conversation Intelligence Services/Transcripts/Sentences, Enterprise
+  Knowledge Bases/Knowledge, and Custom Operators.
 - **Dev Phone overwrites a number's webhooks** — never point it at a production number.
-- **`TWILIO_MCP_CREDS`** — Setup writes it to `.toolkit/.env` (chmod 600, gitignored,
-  never printed to the log) instead of echoing it to stdout/shell history. Load it
-  with `source .toolkit/.env`.
+- **`TWILIO_MCP_CREDS`** — **Twilio CLI → Enable Execute MCP (read-only)** writes
+  it to `.toolkit/.env` (chmod 600, gitignored, never printed to the log)
+  instead of echoing it to stdout/shell history. Load it with
+  `source .toolkit/.env`.
 - Model weights plus local runtime binaries are git-ignored. Setup currently
   downloads Gemma/llamafile only; voice runtime paths are reserved for the
   coming-soon Whisper work.

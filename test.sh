@@ -107,7 +107,7 @@ check "model wait shows Twilio AI tips" bash -c '
   grep -q "Twilio AI tip" tui/src/lib/model-install.ts &&
   grep -q "facts: true" tui/src/lib/model-install.ts
 '
-check "setup has blast-radius warning" grep -q 'spend limit' tui/src/lib/setup.ts
+check "setup explains restricted Execute MCP path" bash -c 'grep -q "Enable Execute MCP (read-only)" tui/src/lib/setup.ts && grep -q "No send, create, update, or delete permission" tui/src/lib/setup.ts'
 check "setup never prints secret to log" bash -c '! grep -q "SHOWN ONCE" tui/src/lib/setup.ts'
 check "setup has GGUF size check"     grep -q 'GGUF_MIN_BYTES' tui/src/lib/model-install.ts
 check "setup handles Windows path"    grep -q 'llamafile.exe\|win32' tui/src/lib/constants.ts
@@ -393,9 +393,14 @@ check "toolkit doctor uses current model paths" bash -c '
 check "E-8/H-4 root guard in index.ts" grep -q 'assertNotRoot' tui/src/index.ts
 check "E-8/H-4 root guard in toolkit entry" bash -c 'grep -q "EUID" toolkit && grep -q "should not be run as root" toolkit'
 check "C-1/H-3 magic-byte check before chmod +x" grep -q 'looksLikeExecutable' tui/src/lib/model-install.ts
-check "C-2/H-1/H-2 creds written chmod 600, not printed" bash -c 'grep -q "writeMcpCredsFile" tui/src/lib/setup.ts && grep -q "0o600" tui/src/lib/setup.ts && ! grep -q "TWILIO_MCP_CREDS=\${mcpCreds}" tui/src/lib/setup.ts'
+check "C-2/H-1/H-2 creds written chmod 600, not printed" bash -c 'grep -q "writeFileSync(envFile" tui/src/lib/actions.ts && grep -q "0o600" tui/src/lib/actions.ts && ! grep -q "TWILIO_MCP_CREDS=\${creds}" tui/src/lib/actions.ts'
+check "full setup does not mint broad Execute MCP keys" bash -c '
+  ! grep -q "api:core:keys:create" tui/src/lib/setup.ts &&
+  ! grep -q "including sending messages" tui/src/lib/setup.ts &&
+  grep -q "Enable Execute MCP (read-only)" tui/src/lib/setup.ts
+'
 check "C-3 extraction uses mkdtemp, not predictable path" bash -c 'grep -q "mkdtempSync" tui/src/lib/model-install.ts && ! grep -q "extract_tmp" tui/src/lib/model-install.ts'
-check "C-4 creds format validated"    grep -q 'looksLikeMcpCreds' tui/src/lib/setup.ts
+check "C-4 creds format validated"    grep -q 'looksLikeMcpCreds' tui/src/lib/actions.ts
 check "Execute MCP restricted key has puzzle read scopes only" bash -c '
   grep -q "/twilio/messaging/messages/read" tui/src/lib/actions.ts &&
   grep -q "/twilio/intelligence/services/read" tui/src/lib/actions.ts &&

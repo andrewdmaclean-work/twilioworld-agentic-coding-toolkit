@@ -1,16 +1,13 @@
 // lib/setup.ts — setup workflow implementation (add-on picker is in the TUI).
 // Install choices are already written to config.json before this is called.
 
-import {
-  chmodSync, existsSync, mkdirSync, writeFileSync,
-} from "fs";
+import { existsSync, mkdirSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { capture, have, runStreaming, type LogFn } from "./exec.ts";
 import { addonEnabled } from "./config.ts";
 import { installLocalModel } from "./model-install.ts";
 import {
-  CONFIG_DIR,
   NPM_GLOBAL_PREFIX,
   ROOT,
   SKILLS_DIR,
@@ -23,26 +20,6 @@ function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
 function stepDone(msg: string, onLog: LogFn) { onLog(`☑ ${msg}`, "stdout"); }
-
-// ── Security audit C-4 (defense-in-depth): exec.ts's shCmd()/q() already
-// single-quote-escapes every arg before it reaches a shell, so this isn't
-// a command-injection gate — it just catches a malformed/truncated value
-// before it's written anywhere or handed to another tool.
-function looksLikeMcpCreds(creds: string): boolean {
-  return /^AC[a-f0-9]+\/SK[a-f0-9]+:.+$/.test(creds);
-}
-
-// ── Security audit C-2/H-1/H-2: never print the secret to the log pane
-// (it's a TUI transcript — easy to screenshot/share — and the old bash
-// version's `echo ... >> .zsh_history` advice put it in shell history
-// too). Write it to a local, gitignored, chmod-600 file instead.
-function writeMcpCredsFile(creds: string): string {
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  const envFile = join(CONFIG_DIR, ".env");
-  writeFileSync(envFile, `export TWILIO_MCP_CREDS="${creds}"\n`, { mode: 0o600 });
-  chmodSync(envFile, 0o600); // belt-and-suspenders in case umask altered the create mode
-  return envFile;
-}
 
 // ── Main export ───────────────────────────────────────────────────────
 export async function runSetup(opts: {
@@ -121,52 +98,15 @@ export async function runSetup(opts: {
 
   // ── Step 3: API key for Execute MCP ───────────────────────────────
   step("☐ [3/6] Execute MCP API key (optional)", onLog);
-  let mcpCreds = "";
   if (!activeAccountSid) {
     warn("Not logged in to Twilio CLI — skipping Execute MCP.", onLog);
-    say("   The Execute MCP is wired automatically once creds exist: run", onLog);
-    say("   `twilio login`, then re-run Setup to create a scoped API key.", onLog);
+    say("   Use Twilio CLI → Log in, then Twilio CLI → Enable Execute MCP (read-only).", onLog);
   } else {
-    // Check for existing key
-    const keysJson = capture("twilio", ["api:core:keys:list", "-o", "json"]);
-    warn("The Execute MCP (EXPERIMENTAL) can call any Twilio API on this account,", onLog);
-    warn("including sending messages, making calls, and deleting resources.", onLog);
-    warn("Recommend: set a spend limit at console.twilio.com/billing before continuing.", onLog);
-    let existingSk = "";
-    try {
-      const keys: Array<{ friendlyName: string; sid: string }> = JSON.parse(keysJson || "[]");
-      existingSk = keys.find((k) => k.friendlyName === "twilioworld-toolkit")?.sid ?? "";
-    } catch { /* ignore */ }
-
-    if (existingSk) {
-      warn(`Key 'twilioworld-toolkit' already exists on this account (${existingSk}).`, onLog);
-      warn("The secret is not recoverable. To recreate: twilio api:core:keys:remove --sid " + existingSk, onLog);
-    } else {
-      const keyJson = capture("twilio", ["api:core:keys:create", "--friendly-name", "twilioworld-toolkit", "-o", "json"]);
-      try {
-        const parsed = JSON.parse(keyJson || "[]");
-        const entry = Array.isArray(parsed) ? parsed[0] : parsed;
-        const sid = entry?.sid ?? "";
-        const secret = entry?.secret ?? "";
-        if (sid && secret) {
-          mcpCreds = `${activeAccountSid}/${sid}:${secret}`;
-          if (!looksLikeMcpCreds(mcpCreds)) {
-            warn("API returned a credential in an unexpected format — wire Execute MCP creds manually.", onLog);
-            mcpCreds = "";
-          } else {
-            ok(`API key created  (${sid})`, onLog);
-            const envFile = writeMcpCredsFile(mcpCreds);
-            say("", onLog);
-            ok(`Saved to ${envFile}  (chmod 600, gitignored — never printed to this log)`, onLog);
-            say(`   Load it in your shell:  source ${envFile}`, onLog);
-          }
-        } else {
-          warn("Couldn't parse key output — wire Execute MCP creds manually.", onLog);
-        }
-      } catch {
-        warn("Couldn't create API key — wire Execute MCP creds manually.", onLog);
-      }
-    }
+    ok("Toolkit-local Twilio CLI is logged in.", onLog);
+    say("   Setup does not create Execute MCP credentials automatically.", onLog);
+    say("   Use Twilio CLI → Enable Execute MCP (read-only) to create a restricted key.", onLog);
+    say("   Scope: Messaging logs, Conversation Intelligence, Enterprise Knowledge, Custom Operators.", onLog);
+    say("   No send, create, update, or delete permission is granted.", onLog);
   }
   stepDone("[3/6] Execute MCP API key (optional)", onLog);
 
@@ -235,6 +175,5 @@ export async function runSetup(opts: {
 
   say("", onLog);
   ok("Setup complete.", onLog);
-  if (mcpCreds) say(`   Execute MCP creds: source ${join(CONFIG_DIR, ".env")}`, onLog);
   onDone(true);
 }

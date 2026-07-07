@@ -264,7 +264,7 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
         "Always wired",
         "  Twilio Skills + Docs MCP (no auth, no config needed)",
         "",
-        "Execute MCP (calls real Twilio APIs)",
+        "Execute MCP (restricted read-only Twilio API access)",
         `  Wired only if creds are exported: ${yesNo(Boolean(process.env.TWILIO_MCP_CREDS))}`,
       ].join("\n");
     case "devphone":

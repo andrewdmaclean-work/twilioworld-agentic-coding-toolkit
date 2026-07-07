@@ -1,17 +1,17 @@
 // lib/pi-mcp.ts — shared helper for writing Pi MCP config.
 // Used by configure-agent.ts and pi.ts.
 //
-// Docs MCP is always wired (no auth, no risk). Execute MCP is wired only
-// when Twilio API creds are available — it can call live Twilio APIs, so
-// it self-gates on creds rather than a separate opt-in toggle.
+// Docs MCP is always wired (no auth, no account data). Execute MCP is wired only
+// when restricted Twilio API creds are available, so it self-gates on creds
+// rather than a separate opt-in toggle.
 
 import { chmodSync, mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
 import { DOCS_MCP_URL, TWILIO_MCP_PKG } from "./constants.ts";
 
 // The Execute MCP loads NO tools unless told which API service(s) to expose
-// (see @twilio-alpha/mcp README). Our read-only key is scoped to the core
-// v2010 API (Messages/Calls/etc.), so load that service.
+// (see @twilio-alpha/mcp README). Keep this narrow; the key itself remains
+// restricted to read-only clue surfaces.
 const EXECUTE_SERVICES = "twilio_api_v2010";
 
 export function writePiMcpConfig(piDir: string, mcpCreds = ""): void {
