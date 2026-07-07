@@ -26,7 +26,27 @@ function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
 
 function curlDownloadArgs(url: string, dest: string): string[] {
-  return ["-fL", "--max-redirs", "5", "-C", "-", "--progress-bar", url, "-o", dest];
+  // --no-progress-meter suppresses curl's \r-based progress bar, which the
+  // in-app log pane can't display (it never flushes until the download ends).
+  // We log our own size-based progress via a setInterval in downloadLocalModel.
+  return ["-fL", "--max-redirs", "5", "-C", "-", "--no-progress-meter", url, "-o", dest];
+}
+
+function sizeLabel(bytes: number): string {
+  if (bytes < 1_048_576) return `${(bytes / 1024).toFixed(0)} KB`;
+  if (bytes < 1_073_741_824) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+}
+
+/** Poll dest file size every intervalMs and log "X / total" progress lines. */
+function startProgressLogger(dest: string, totalBytes: number, intervalMs: number, onLog: LogFn): ReturnType<typeof setInterval> {
+  return setInterval(() => {
+    try {
+      const downloaded = existsSync(dest) ? statSync(dest).size : 0;
+      const pct = totalBytes > 0 ? Math.min(100, Math.round((downloaded / totalBytes) * 100)) : 0;
+      onLog(`   downloading… ${sizeLabel(downloaded)} / ${sizeLabel(totalBytes)}  (${pct}%)`, "stdout");
+    } catch { /* file not yet visible — ignore */ }
+  }, intervalMs);
 }
 
 function looksLikeExecutable(path: string): boolean {
@@ -85,9 +105,11 @@ export async function downloadLocalModel(opts: { onLog: LogFn; onDone: (ok: bool
 
   // Runtime
   if (!runtimeOk()) {
-    say("   Downloading llamafile runtime…", onLog);
+    say("   Downloading llamafile runtime (~100MB)…", onLog);
     mkdirSync(TOOLS_DIR, { recursive: true });
+    const runtimeProgress = startProgressLogger(LLAMAFILE_DEST, 100_000_000, 3000, onLog);
     const res = await runStreaming("curl", curlDownloadArgs(LLAMAFILE_URL, LLAMAFILE_DEST), { cwd: ROOT, onLog });
+    clearInterval(runtimeProgress);
     if (res.ok && !looksLikeExecutable(LLAMAFILE_DEST)) {
       err("Downloaded runtime isn't a valid binary — removing it.", onLog);
       rmSync(LLAMAFILE_DEST, { force: true });
@@ -103,8 +125,10 @@ export async function downloadLocalModel(opts: { onLog: LogFn; onDone: (ok: bool
     if (existsSync(GGUF_DEST)) rmSync(GGUF_DEST);
     mkdirSync(MODELS_DIR, { recursive: true });
     if (!existsSync(GGUF_STAGING)) {
-      say("   Downloading Gemma 4 E2B (~2.5GB)…", onLog);
+      say("   Downloading Gemma 4 E2B (~2.5GB) — this will take a few minutes…", onLog);
+      const weightsProgress = startProgressLogger(GGUF_STAGING, 2_684_354_560, 3000, onLog);
       const res = await runStreaming("curl", curlDownloadArgs(GGUF_URL, GGUF_STAGING), { cwd: ROOT, onLog });
+      clearInterval(weightsProgress);
       if (!res.ok) { err("Download failed — partial file kept for resume. Try again.", onLog); onDone(false); return; }
     }
     say("   Extracting…", onLog);
