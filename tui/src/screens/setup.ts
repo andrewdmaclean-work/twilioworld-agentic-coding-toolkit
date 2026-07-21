@@ -54,6 +54,7 @@ export function buildSetupScreen(
   renderer: CliRenderer,
   onFinished: () => void,
   onCancel: () => void,
+  opts: { firstRun?: boolean } = {},
 ): BoxRenderable {
   const current = readConfig();
   const addonItems = buildAddonItems();
@@ -64,11 +65,15 @@ export function buildSetupScreen(
 
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "setup-screen",
-    route: "Dashboard / Setup",
-    title: "Choose what to install",
-    subtitle: "Space toggles install choices. Enter saves. Escape returns to dashboard.",
+    route: opts.firstRun ? "Welcome" : "Dashboard / Setup",
+    title: opts.firstRun ? "Set up your toolkit" : "Choose what to install",
+    subtitle: opts.firstRun
+      ? "Choose what you need now. You can change these choices later."
+      : "Space toggles install choices. Enter saves. Escape returns to dashboard.",
     bodyTitle: "Install Choices",
-    footer: "  Escape dashboard    Space toggle choice    Enter save",
+    footer: opts.firstRun
+      ? "  Escape use defaults    Space toggle choice    Enter continue"
+      : "  Escape dashboard    Space toggle choice    Enter save",
   });
 
   const checklist = new CheckList(renderer, "addon-pick", addonItems, initialChecked);
@@ -79,8 +84,8 @@ export function buildSetupScreen(
   const confirmSelect = new SelectRenderable(renderer, {
     id: "confirm-select", height: 4, flexGrow: 1, flexShrink: 0, visible: false,
     options: [
-      { name: "Yes — install now",          description: "Runs in this window, streaming output" },
-      { name: "No — save choices only",     description: "Run Setup again any time to install" },
+      { name: "Install selected components", description: "Runs setup here and shows progress" },
+      { name: opts.firstRun ? "Continue without installing" : "Save choices only", description: "Install these components later from Tools & settings" },
     ],
     backgroundColor: "transparent",
     focusedBackgroundColor: "transparent",
@@ -141,7 +146,14 @@ export function buildSetupScreen(
     confirmSelect.focus();
     confirmGuard.arm();
   };
-  checklist.onCancel = () => onCancel();
+  checklist.onCancel = () => {
+    if (opts.firstRun) {
+      writeConfig(current.addons, current.settings);
+      onFinished();
+      return;
+    }
+    onCancel();
+  };
   checklist.focus();
 
   return screen;

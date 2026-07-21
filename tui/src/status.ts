@@ -43,6 +43,15 @@ export interface ToolkitStatus {
   addons:   Record<string, boolean>;
 }
 
+const STATUS_CACHE_MS = 10_000;
+let cachedStatus: ToolkitStatus | null = null;
+let cachedAt = 0;
+let statusInFlight: Promise<ToolkitStatus> | null = null;
+
+export function invalidateStatusCache(): void {
+  cachedAt = 0;
+}
+
 function ggufReady(): boolean {
   if (!existsSync(GGUF_DEST)) return false;
   try { return statSync(GGUF_DEST).size >= GGUF_MIN_BYTES; } catch { return false; }
@@ -68,7 +77,7 @@ function countSkills(dir: string): number {
 /** Fully async, fully parallel status read. Nothing here blocks the main
  *  thread — every subprocess check is spawned concurrently and awaited
  *  together, so OpenTUI keeps rendering/handling input the whole time. */
-export async function readStatusAsync(): Promise<ToolkitStatus> {
+async function computeStatus(): Promise<ToolkitStatus> {
   // fs-only checks are cheap and synchronous is fine for them.
   const fileReady = ggufReady();
   const runtimeReady = fileExecutable(LLAMAFILE_DEST);
@@ -126,4 +135,19 @@ export async function readStatusAsync(): Promise<ToolkitStatus> {
     localGemmaAvailable,
     addons:   cfg.addons as Record<string, boolean>,
   };
+}
+
+export async function readStatusAsync(opts: { fresh?: boolean } = {}): Promise<ToolkitStatus> {
+  const now = Date.now();
+  if (!opts.fresh && cachedStatus && now - cachedAt < STATUS_CACHE_MS) return cachedStatus;
+  if (!opts.fresh && statusInFlight) return statusInFlight;
+
+  statusInFlight = computeStatus().then((status) => {
+    cachedStatus = status;
+    cachedAt = Date.now();
+    return status;
+  }).finally(() => {
+    statusInFlight = null;
+  });
+  return statusInFlight;
 }

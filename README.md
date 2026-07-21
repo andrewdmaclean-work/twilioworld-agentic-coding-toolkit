@@ -44,45 +44,36 @@ selected-action details on the right.
 
 ```text
 ╔════════════════════════════════════════════════════════════════════════════╗
-║ TwilioWorld Agentic Coding Toolkit                                        ║
-║                                                                            ║
-║ TwilioWorld                                                                ║
-║ Agentic Coding Toolkit                                                     ║
-║ model missing  |  Twilio primary                                           ║
-║ Next: Run Setup to download the local Gemma model and llamafile runtime.   ║
+║ TwilioWorld                                                   .            ║
+║ Agentic Coding Toolkit                                     .----.          ║
+║ model ready  |  Twilio not logged in                       |o  o|          ║
+║ Next: Chat, configure an agent, or open Dev Phone.          |  - |          ║
+║                                                            '----'          ║
 ╚════════════════════════════════════════════════════════════════════════════╝
 
-┌ Actions ───────────────────────┐ ┌ Install Choices ───────────────────────┐
-│ ▶ Setup                         │ │ Install choices  Local chat model,     │
-│   Configure agent               │ │ Agent Skills, Agent Docs MCP           │
-│   Sign up for TwilioWorld       │ └────────────────────────────────────────┘
-│   Uninstall                     │ ┌ Active ────────────────────────────────┐
-│   Exit                          │ │   ·  No running toolkit services.      │
+┌ Actions ───────────────────────┐ ┌ Status ────────────────────────────────┐
+│ ▶ Chat with Twilio Docs         │ │  · Local model  downloaded             │
+│   Configure agent               │ │  · Skills       installed              │
+│   Dev Phone                     │ └────────────────────────────────────────┘
+│   Twilio CLI                    │ ┌ Selected Action ───────────────────────┐
+│   Tools & settings              │ │ Purpose                                │
+│   Exit                          │ │   Chat locally using Skills + Docs MCP. │
 └─────────────────────────────────┘ └────────────────────────────────────────┘
-                                  ┌ Selected Action ────────────────────────┐
-                                  │ Purpose                                  │
-                                  │   Choose what to install locally and     │
-                                  │   what to wire into coding agents.       │
-                                  │                                          │
-                                  │ Network installs/downloads happen only   │
-                                  │ after the confirmation step.             │
-                                  └──────────────────────────────────────────┘
-
-  ↑/↓ or j/k navigate    Enter run    Setup changes install choices    q quit
 ```
 
-Setup asks what to install or wire once, then Configure agent uses those choices
-silently. The fastest path to a working agent is:
+First run opens the same resumable Setup screen available later under **Tools &
+settings → Setup choices**. The fastest path is:
 
-1. Run `./toolkit` → **Setup** → choose what to install (Gemma is on by default —
+1. Choose what to install (Gemma is on by default —
    it powers in-app chat and, if you pick Pi, Pi too)
-2. Back at the menu → **Chat with Twilio** for instant Q&A, or **Configure
+2. Use **Chat with Twilio Docs** for local Q&A, or **Configure
    agent** → pick any agent (Pi included) to wire it up
 
-**Chat with Twilio** and **Model server** only appear after the local model and
-runtime are installed. **Dev Phone** appears only if it is selected or already
-installed. **Sign up for TwilioWorld** is always visible and opens
-`https://twilio.world` in your browser.
+Chat opens directly when the model is installed. Browser UI, model thinking,
+server stop, and model removal live under **Tools & settings → Local model
+controls**. The robot face reflects model/account state and blinks while the
+dashboard is open. **Sign up for TwilioWorld** and **Twilio AI Docs** are also
+available from Tools & settings.
 
 Setup, agent configuration, local chat, and model server control all run inside the
 TUI dashboard. **Pi** and **Dev Phone** are different — they're real interactive CLIs,
@@ -297,13 +288,13 @@ That single step:
 Pi is intentionally lightweight. It is the right tool for focused Twilio tasks, quick
 questions, and iterating on code, with no API key required. For long multi-tool agent
 runs with heavy context, use a cloud-backed agent (OpenCode + Anthropic/OpenAI is the
-recommended pairing) — or just use **Chat with Twilio** from the menu for quick
+recommended pairing) — or just use **Chat with Twilio Docs** from the menu for quick
 Twilio Q&A without installing Pi at all.
 
 **Manual launch** (Configure agent is simpler):
 
 ```bash
-# After Setup installs the local model, start "Model server" from the TUI first.
+# Configure agent starts the local model automatically when Pi launches.
 PI_CODING_AGENT_DIR="$PWD/.toolkit/pi-agent" \
   pi --provider llamafile --model gemma4-e2b \
      --append-system-prompt .pi/routing-prompt.md
@@ -327,7 +318,7 @@ Skills (make them global):
     cp -r vendor/twilio-ai/skills/ ~/.agents/skills/
 
 Local model (OpenAI-compatible):
-    http://127.0.0.1:8080/v1   (choose Model server in the TUI after Setup)
+    http://127.0.0.1:8080/v1   (Tools & settings → Local model controls)
     # If 8080 is already used: MODEL_SERVER_PORT=8082 ./toolkit
 ```
 
@@ -339,7 +330,7 @@ Gemini CLI, JetBrains Junie, and 30+ more.
 ## The local model
 
 ```bash
-./toolkit                   # choose "Chat with Twilio" or "Model server"
+./toolkit                   # choose "Chat with Twilio Docs"
 MODEL_SERVER_PORT=8082 ./toolkit  # avoid a local 8080 conflict
 CTX_SIZE=65536 ./toolkit    # even more headroom for long multi-tool sessions
 MODEL_REASONING=on ./toolkit      # enable Gemma thinking; default is off
@@ -348,7 +339,7 @@ MODEL_REASONING=on ./toolkit      # enable Gemma thinking; default is off
 Powered by [llamafile](https://github.com/mozilla-ai/llamafile) (Mozilla) — a single
 executable. The TUI starts the local OpenAI-compatible server in the background and
 renders chat inside the OpenTUI dashboard, so the toolkit does not appear to exit
-when you choose **Chat with Twilio**. Tools (OpenCode, Cursor, etc.) can connect
+when you choose **Chat with Twilio Docs**. Tools (OpenCode, Cursor, etc.) can connect
 to `http://127.0.0.1:8080/v1` at the same time, or to
 `http://127.0.0.1:$MODEL_SERVER_PORT/v1` if you override the port.
 
@@ -368,7 +359,7 @@ Setup — this toolkit doesn't build it. But with the MCP proxy enabled (below),
 the toolkit automatically opens the web UI in your browser and pre-configures
 it: the Twilio Docs MCP server is wired in and a Twilio-aware system message is
 set, so it behaves like a Twilio-aware assistant from the first message — no
-manual Settings navigation required. Use **Chat with Twilio** in the TUI (or a
+manual Settings navigation required. Use **Chat with Twilio Docs** in the TUI (or a
 configured agent) for the toolkit's full tool surface (Skills, status/config
 introspection); use the web UI at the model server root when you want that Twilio-aware
 assistant in a plain browser tab instead.
@@ -394,13 +385,10 @@ real constraints, straight from upstream llama.cpp:
   `HTTPS requested but CPPHTTPLIB_OPENSSL_SUPPORT is not defined`. The toolkit
   works around this with a tiny local HTTP→HTTPS bridge (see below).
 
-**1. Turn it on** — check **"Enable MCP in the local model web UI"** in Setup (off
-by default; it's experimental, and llama.cpp's own docs say "do not enable in
-untrusted environments" since it opens a CORS proxy in the local server).
-
-**2. That's it.** From then on, any time you choose **Model server** or **Chat
-with Twilio** from the menu, the toolkit starts everything wired up and opens the
-web UI already configured — no clicking through Settings, no pasting URLs.
+Open **Tools & settings → Local model controls → Open browser UI**. The toolkit
+starts everything wired up and opens the web UI already configured — no clicking
+through Settings and no pasting URLs. Treat the local CORS proxy as experimental;
+do not enable it in untrusted environments.
 
 Under the hood, when the addon is on the toolkit:
 - passes `--ui-mcp-proxy` to enable llama.cpp's browser CORS proxy

@@ -11,15 +11,16 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 
-import { readStatusAsync, type ToolkitStatus } from "./status.ts";
+import { invalidateStatusCache, readStatusAsync, type ToolkitStatus } from "./status.ts";
 import { existsSync } from "fs";
 import { buildAgentScreen } from "./screens/agent.ts";
 import { buildChatScreen } from "./screens/chat.ts";
 import { buildSubmenuScreen } from "./screens/submenu.ts";
 import { buildLogScreen } from "./screens/log.ts";
-import { buildOnboardingScreen } from "./screens/onboarding.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
+import { buildModelControlsScreen } from "./screens/model-controls.ts";
+import { buildToolsScreen } from "./screens/tools.ts";
 import {
   downloadLocalModel, installDevPhone, installTwilioCli,
   openDevPhone, openTwilioLogin, openTwilioTerminal, stopModelServer,
@@ -33,7 +34,7 @@ import { modelReasoningMode, setModelReasoningMode, type ModelReasoningMode } fr
 import {
   LLAMAFILE_DEST, LOCAL_MODEL_SIZE_LABEL, ROOT, MODEL_SERVER_PID, MODEL_SERVER_PORT, MODEL_SERVER_URL, CONFIG_FILE,
 } from "./lib/constants.ts";
-import { MODEL_SERVER_LOG, serverArgs, modelReady } from "./lib/model.ts";
+import { MODEL_SERVER_LOG, serverArgs } from "./lib/model.ts";
 import { openUrl, openLlamaWebUi, startMcpProxy, capture, have, startDaemon } from "./lib/exec.ts";
 import { pathNodeVersion, supportsPiNode } from "./lib/node-version.ts";
 
@@ -659,11 +660,12 @@ async function main() {
 
   let polling = false;
   let latestStatus: ToolkitStatus | null = null;
-  async function poll() {
+  async function poll(fresh = false) {
     if (polling) return;
     polling = true;
     try {
-      const s = await readStatusAsync();
+      if (fresh) invalidateStatusCache();
+      const s = await readStatusAsync({ fresh });
       latestStatus = s;
       update(s);
     } finally {
@@ -671,8 +673,8 @@ async function main() {
     }
   }
   function refreshStatus(delayMs = 0) {
-    if (delayMs > 0) setTimeout(() => { void poll(); }, delayMs);
-    else void poll();
+    if (delayMs > 0) setTimeout(() => { void poll(true); }, delayMs);
+    else void poll(true);
   }
   function back() { backRoute(); busy = false; refreshStatus(); }
 
@@ -697,9 +699,47 @@ async function main() {
     showRoute(buildLogScreen(renderer, title, (onLog, onDone) => {
       return run(onLog, (ok) => {
         onDone(ok);
-        void poll();
+        void poll(true);
       });
     }, () => back()), title);
+  }
+
+  function startBrowserChat(): void {
+    startMcpProxy();
+    if (!Boolean(capture("curl", ["-fsS", MODEL_SERVER_URL]))) {
+      startDaemon(LLAMAFILE_DEST, serverArgs(), { cwd: ROOT, logFile: MODEL_SERVER_LOG, pidFile: MODEL_SERVER_PID });
+      flash(`Starting model server on :${MODEL_SERVER_PORT}…`, GREEN);
+      refreshStatus();
+      setTimeout(() => { refreshStatus(); openLlamaWebUi(); }, 3000);
+      return;
+    }
+    openLlamaWebUi();
+    flash("Opening web UI in your browser", GREEN);
+    refreshStatus();
+  }
+
+  function showModelControls(): void {
+    const reasoningMode = modelReasoningMode();
+    showRoute(buildModelControlsScreen(renderer, {
+      status: latestStatus,
+      reasoningMode,
+      onOpenBrowser: startBrowserChat,
+      onMissingModel: () => flash("Local model not downloaded — use Setup choices", YELLOW),
+      onToggleReasoning: () => {
+        const next = nextModelReasoningMode(reasoningMode);
+        setModelReasoningMode(next);
+        stopModelServer();
+        flash(`Model thinking ${modelReasoningLabel(next).toLowerCase()} — applies on next start`, GREEN);
+        refreshStatus();
+      },
+      onStop: () => {
+        const stopped = stopModelServer();
+        flash(stopped ? "Model server stopped" : "Nothing was running", stopped ? GREEN : YELLOW);
+        refreshStatus();
+      },
+      onRemove: () => runAction("Remove local model", (onLog, onDone) => runUninstall({ keys: ["modelRuntime"] as UninstallKey[], onLog, onDone })),
+      onCancel: back,
+    }), "Local model");
   }
 
   menuList.on(SelectRenderableEvents.ITEM_SELECTED, async (_i, opt) => {
@@ -711,143 +751,53 @@ async function main() {
 
       case "tools": {
         busy = true;
-        showRoute(buildSubmenuScreen(renderer, {
-          id: "tools-screen",
-          route: "Dashboard / Tools & settings",
-          title: "Tools & settings",
-          subtitle: "Manage optional components or open project resources.",
-          bodyTitle: "Tools & settings",
-          options: [
-            {
-              name: "Setup choices",
-              description: "install optional components or save choices for later",
-              onSelect: () => {
-                showRoute(buildSetupScreen(renderer, back, back), "Setup");
-                return false;
-              },
-            },
-            {
-              name: "Sign up for TwilioWorld",
-              description: "open twilio.world in your browser",
-              onSelect: () => {
-                const res = openUrl("https://twilio.world");
-                flash(res.ok ? "Opening twilio.world in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
-                return true;
-              },
-            },
-            {
-              name: "Twilio AI Docs",
-              description: "open twilio.com/docs/ai in your browser",
-              onSelect: () => {
-                const res = openUrl("https://www.twilio.com/docs/ai");
-                flash(res.ok ? "Opening twilio.com/docs/ai in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
-                return true;
-              },
-            },
-          ],
-        }, back), "Tools & settings");
+        showRoute(buildToolsScreen(renderer, {
+          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Setup"),
+          onModelControls: showModelControls,
+          onTwilioWorld: () => {
+            const res = openUrl("https://twilio.world");
+            flash(res.ok ? "Opening twilio.world in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
+          },
+          onDocs: () => {
+            const res = openUrl("https://www.twilio.com/docs/ai");
+            flash(res.ok ? "Opening twilio.com/docs/ai in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
+          },
+          onCancel: back,
+        }), "Tools & settings");
         break;
       }
 
       case "chat": {
         busy = true;
-        // Local Gemma is the only way to chat. If it isn't downloaded,
-        // the submenu's actions offer to download it instead of dead-ending.
-        const ready = () => { const r = modelReady(); return r.runtime && r.weights; };
-        const reasoningMode = modelReasoningMode();
-
-        const startBrowser = () => {
-          startMcpProxy();
-          if (!Boolean(capture("curl", ["-fsS", MODEL_SERVER_URL]))) {
-            startDaemon(LLAMAFILE_DEST, serverArgs(), { cwd: ROOT, logFile: MODEL_SERVER_LOG, pidFile: MODEL_SERVER_PID });
-            flash(`Starting model server on :${MODEL_SERVER_PORT}…`, GREEN);
-            refreshStatus();
-            setTimeout(() => { refreshStatus(); openLlamaWebUi(); }, 3000);
-          } else {
-            openLlamaWebUi();
-            flash("Opening web UI in your browser", GREEN);
-            refreshStatus();
-          }
-        };
-
-	        showRoute(buildSubmenuScreen(renderer, {
-	          id: "chat-screen",
-	          route: "Dashboard / Chat with Twilio Docs",
-	          title: "Chat with Twilio Docs",
-	          subtitle: "Local AI chat. Escape returns to dashboard.",
-	          bodyTitle: "Chat",
-	          options: [
-	            {
-	              name: `Model thinking: ${modelReasoningLabel(reasoningMode)}`,
-	              description: reasoningMode === "off"
-	                ? "faster local replies; press Enter to turn thinking on"
-	                : "slower but more deliberate replies; press Enter to turn thinking off",
-	              onSelect: () => {
-	                const next = nextModelReasoningMode(reasoningMode);
-	                setModelReasoningMode(next);
-	                const stopped = stopModelServer();
-	                flash(
-	                  `Model thinking ${modelReasoningLabel(next).toLowerCase()}${stopped ? " — server stopped; restart chat to apply" : " — applies on next server start"}`,
-	                  GREEN,
-	                );
-	                refreshStatus();
-	                refreshStatus(500);
-	                return true;
-	              },
-	            },
-	            {
-	              name: doneLabel(Boolean(latestStatus?.model.ready), "In the TUI"),
-	              description: latestStatus?.model.ready
-	                ? "model downloaded — chat inside this terminal"
-	                : "downloads the local model, then chats inside this terminal",
-	              onSelect: () => {
-	                if (!ready()) {
-	                  runAction("Download local model", (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
-                  return false;
-                }
-                showRoute(buildChatScreen(renderer, back), "Chat");
+        if (latestStatus?.model.ready) {
+          showRoute(buildChatScreen(renderer, back), "Chat");
+          break;
+        }
+        showRoute(buildSubmenuScreen(renderer, {
+          id: "chat-download-screen",
+          route: "Dashboard / Chat with Twilio Docs",
+          title: "Local model required",
+          subtitle: `Chat downloads the local model once (~${LOCAL_MODEL_SIZE_LABEL}).`,
+          bodyTitle: "Chat setup",
+          options: [
+            {
+              name: "Download local model",
+              description: "install Gemma and its local runtime, then return to Chat",
+              onSelect: () => {
+                runAction("Download local model", (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
                 return false;
               },
-	            },
-	            {
-	              name: doneLabel(Boolean(latestStatus?.model.running), "In the browser (web UI)"),
-	              description: latestStatus?.model.running
-	                ? `model server running on :${MODEL_SERVER_PORT} — open web UI`
-	                : "start the model server and open the llama.cpp web UI",
-	              onSelect: () => {
-	                if (!ready()) {
-	                  runAction("Download local model", (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
-                  return false;
-                }
-                startBrowser();
-                return true;
-              },
-	            },
-	            {
-	              name: "Stop background model server",
-	              description: latestStatus?.model.running
-	                ? `running on :${MODEL_SERVER_PORT} — stop it to reclaim RAM`
-	                : "not running",
-	              onSelect: () => {
-	                const stopped = stopModelServer();
-                flash(stopped ? "✓  Model server stopped" : "⚠  Nothing was running", stopped ? GREEN : YELLOW);
-                refreshStatus();
-                refreshStatus(500);
-                return true;
-              },
-	            },
-	            {
-	              name: "Remove local model",
-	              description: latestStatus?.model.ready
-	                ? `delete downloaded Gemma + llamafile (~${LOCAL_MODEL_SIZE_LABEL})`
-	                : "nothing downloaded yet",
-	              onSelect: () => {
-                runAction("Remove local model", (onLog, onDone) => runUninstall({ keys: ["modelRuntime"] as UninstallKey[], onLog, onDone }));
+            },
+            {
+              name: "Review Setup choices",
+              description: "change optional component selections before installing",
+              onSelect: () => {
+                showRoute(buildSetupScreen(renderer, back, back), "Setup");
                 return false;
               },
             },
           ],
-        }, back), "Chat with Twilio Docs");
+        }, back), "Chat setup");
         break;
       }
 
@@ -1029,8 +979,7 @@ async function main() {
     }
   });
 
-  // First run (no .toolkit/config.json yet) → opinionated onboarding first;
-  // it writes config when finished so later launches skip to the dashboard.
+  // First run uses the same Setup flow available from Tools & settings.
   // Placed here — after poll/back/flash/busy are all initialized — so
   // enterDashboard()'s poll() call never hits a temporal-dead-zone binding.
   function enterDashboard(): void {
@@ -1041,11 +990,11 @@ async function main() {
   }
 
   if (!existsSync(CONFIG_FILE)) {
-    const onboarding = buildOnboardingScreen(renderer, () => {
-      renderer.root.remove(onboarding.id);
+    const setup = buildSetupScreen(renderer, () => {
+      renderer.root.remove(setup.id);
       enterDashboard();
-    });
-    renderer.root.add(onboarding);
+    }, () => {}, { firstRun: true });
+    renderer.root.add(setup);
   } else {
     enterDashboard();
   }

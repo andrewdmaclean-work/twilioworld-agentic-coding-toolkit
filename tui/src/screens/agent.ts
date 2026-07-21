@@ -7,26 +7,18 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { configureAgent } from "../lib/configure-agent.ts";
+import { agentPickerOptions } from "../lib/agents.ts";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
-
-const AGENT_OPTIONS = [
-  { name: "Claude Code",           description: "Anthropic's CLI agent — toolkit installs + launches it for you", value: "Claude Code" },
-  { name: "Codex",                 description: "OpenAI's CLI agent — toolkit installs + launches it for you",   value: "Codex" },
-  { name: "Cursor",                description: "Cursor's CLI agent — toolkit installs + launches it for you",   value: "Cursor" },
-  { name: "OpenCode",              description: "Open-source coding agent — toolkit installs it for you",        value: "OpenCode" },
-  { name: "GitHub Copilot",        description: "GitHub's CLI agent — toolkit installs + launches it for you",   value: "GitHub Copilot" },
-  { name: "Pi",                    description: "Local agent — toolkit installs + runs it for you",               value: "Pi (lightweight TUI)" },
-  { name: "Other / Bring my own",  description: "Manual MCP wiring instructions",                                 value: "Other / Bring my own" },
-];
 
 export function buildAgentScreen(
   renderer: CliRenderer,
   onFinished: (ok?: boolean) => void,
   onCancel: () => void,
 ): BoxRenderable {
+  const agentOptions = agentPickerOptions();
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "agent-screen",
     route: "Dashboard / Configure Agent",
@@ -38,10 +30,10 @@ export function buildAgentScreen(
 
   const select = new SelectRenderable(renderer, {
     id: "agent-select",
-    height: AGENT_OPTIONS.length + 2,
+    height: agentOptions.length + 2,
     flexGrow: 1,
     flexShrink: 0,
-    options: AGENT_OPTIONS,
+    options: agentOptions,
     backgroundColor: "transparent",
     focusedBackgroundColor: "transparent",
     textColor: THEME.silver,

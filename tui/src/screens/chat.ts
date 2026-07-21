@@ -1,8 +1,7 @@
 import {
   BoxRenderable,
-  InputRenderableEvents,
-  InputRenderable,
   ScrollBoxRenderable,
+  TextareaRenderable,
   TextRenderable,
   type CliRenderer,
 } from "@opentui/core";
@@ -38,9 +37,30 @@ type StreamToolCall = ToolCall & { index?: number };
 
 const CHAT_URL = MODEL_SERVER_URL.replace(/\/models$/, "/chat/completions");
 const MODEL_ID = "gemma4-e2b";
+const CHAT_FOOTER = "  Ctrl+Enter send    Ctrl+P/N history    PageUp/PageDown scroll    Escape dashboard";
+
+const SYSTEM_MESSAGE: ChatMessage = {
+  role: "system",
+  content: [
+    "You are a concise TwilioWorld Agentic Coding Toolkit assistant.",
+    "Do not expose chain-of-thought, hidden reasoning, <think> blocks, or internal deliberation.",
+    "Answer in plain text only. Do not use Markdown syntax, headings, bullets, tables, code fences, inline code ticks, bold, or italics.",
+    "You have tool calling. Local chat always has Twilio Skills and Docs MCP available. For Twilio-specific answers, call search_twilio_skills first. If Skills are missing or not enough, call search_twilio_docs_mcp. If the user explicitly asks for MCP, call search_twilio_docs_mcp.",
+    "Use toolkit status/config tools when the user asks about local status, install choices, or installed components.",
+    "After a tool call, summarize the result plainly and briefly.",
+  ].join(" "),
+};
+
+interface SavedTranscriptLine { label: string; content: string; color: string }
+let sessionHistory: ChatMessage[] = [SYSTEM_MESSAGE];
+let sessionTranscript: SavedTranscriptLine[] = [];
 
 export function isVoiceShortcut(key: { ctrl: boolean; name: string }): boolean {
   return key.ctrl && key.name === "r";
+}
+
+export function isChatSendShortcut(key: { ctrl: boolean; name: string }): boolean {
+  return key.ctrl && (key.name === "enter" || key.name === "return" || key.name === "linefeed");
 }
 
 // The text input keeps keyboard focus permanently in this screen (there's no
@@ -48,8 +68,7 @@ export function isVoiceShortcut(key: { ctrl: boolean; name: string }): boolean {
 // are intercepted here and forwarded to the transcript's own ScrollBox key
 // handling instead of being typed into the input. PageUp/PageDown/Home/End
 // always scroll the transcript — an empty single-line input has no use for
-// them. Up/Down only scroll when the input is empty, so they don't fight
-// with any future in-input cursor/history behavior while you're typing.
+// them. Up/Down only scroll when the multiline composer is empty.
 const SCROLL_KEYS_ALWAYS = new Set(["pageup", "pagedown", "home", "end"]);
 const SCROLL_KEYS_WHEN_EMPTY = new Set(["up", "down"]);
 
@@ -236,7 +255,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     title: "Chat with Twilio Docs",
     subtitle: "Local AI chat, grounded in Twilio Skills and Docs MCP.",
     bodyTitle: "Conversation",
-    footer: "  Enter send    PageUp/PageDown scroll    Escape dashboard",
+    footer: CHAT_FOOTER,
   });
 
   const transcript = new ScrollBoxRenderable(renderer, {
@@ -252,14 +271,15 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     borderColor: THEME.redDim,
     title: " Message ",
     titleColor: THEME.red,
-    height: 3,
+    height: 5,
     paddingX: 1,
     backgroundColor: THEME.panelBg,
   });
-  const input = new InputRenderable(renderer, {
+  const input = new TextareaRenderable(renderer, {
     id: "chat-input",
-    value: "",
-    placeholder: "Ask the local model...",
+    initialValue: "",
+    placeholder: "Ask the local model... Enter adds a line.",
+    wrapMode: "word",
     backgroundColor: "transparent",
     focusedBackgroundColor: "transparent",
     textColor: THEME.silver,
@@ -271,37 +291,36 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
   body.add(transcript);
   body.add(inputShell);
 
-  const history: ChatMessage[] = [
-    {
-      role: "system",
-      content: [
-        "You are a concise TwilioWorld Agentic Coding Toolkit assistant.",
-        "Do not expose chain-of-thought, hidden reasoning, <think> blocks, or internal deliberation.",
-        "Answer in plain text only. Do not use Markdown syntax, headings, bullets, tables, code fences, inline code ticks, bold, or italics.",
-        "You have tool calling. Local chat always has Twilio Skills and Docs MCP available. For Twilio-specific answers, call search_twilio_skills first. If Skills are missing or not enough, call search_twilio_docs_mcp. If the user explicitly asks for MCP, call search_twilio_docs_mcp.",
-        "Use toolkit status/config tools when the user asks about local status, install choices, or installed components.",
-        "After a tool call, summarize the result plainly and briefly.",
-      ].join(" "),
-    },
-  ];
+  const history = sessionHistory;
+  const promptHistory = history.filter((message) => message.role === "user").map((message) => message.content);
+  let promptHistoryIndex = promptHistory.length;
+  let promptDraft = "";
   let lineId = 0;
   let sending = false;
   let serverReady = false;
   let serverStarting: Promise<boolean> | null = null;
   let voiceSession: VoiceSession | null = null;
 
-  function addLine(label: string, content: string, color: string): TextRenderable {
+  const savedByLine = new Map<TextRenderable, SavedTranscriptLine>();
+  function addLine(label: string, content: string, color: string, persist = true): TextRenderable {
     const line = new TextRenderable(renderer, {
       id: `chat-line-${++lineId}`,
       content: wrap(`${label} ${content}`, Math.max(40, (transcript.width ?? renderer.width) - 8)),
       fg: color,
     });
     transcript.content.add(line);
+    if (persist) {
+      const saved = { label, content, color };
+      sessionTranscript.push(saved);
+      savedByLine.set(line, saved);
+    }
     return line;
   }
 
   function updateLine(line: TextRenderable, label: string, content: string): void {
     line.content = wrap(`${label} ${content}`, Math.max(40, (transcript.width ?? renderer.width) - 8));
+    const saved = savedByLine.get(line);
+    if (saved) { saved.label = label; saved.content = content; }
   }
 
   async function ensureServer(): Promise<boolean> {
@@ -337,7 +356,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     serverReady = await serverStarting;
     if (!serverReady) serverStarting = null;
     footer.content = serverReady
-      ? `  Enter send    PageUp/PageDown scroll    Server :${MODEL_SERVER_PORT} ready`
+      ? `  Ctrl+Enter send    PageUp/PageDown scroll    Server :${MODEL_SERVER_PORT} ready`
       : `  Model server did not respond after 90s. See ${MODEL_SERVER_LOG}`;
     footer.fg = serverReady ? THEME.dim : THEME.yellow;
     return serverReady;
@@ -345,10 +364,13 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
 
   async function sendText(text: string): Promise<void> {
     if (!text || sending) return;
-    input.value = "";
+    input.clear();
     sending = true;
     addLine("You:", text, THEME.white);
     history.push({ role: "user", content: text });
+    promptHistory.push(text);
+    promptHistoryIndex = promptHistory.length;
+    promptDraft = "";
 
     if (!(await ensureServer())) {
       sending = false;
@@ -407,11 +429,11 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       if (!reply) reply = "I called tools, but the local model did not produce a final answer.";
       if (!wroteReply) addLine("Gemma:", reply, THEME.silver);
       history.push({ role: "assistant", content: reply });
-      footer.content = "  Enter send    PageUp/PageDown scroll    Escape dashboard";
+      footer.content = CHAT_FOOTER;
       footer.fg = THEME.dim;
     } catch (e) {
       addLine("Gemma:", (e as Error).message, THEME.yellow);
-      footer.content = "  Chat request failed. Check the local model server.";
+      footer.content = `  Request failed. Ctrl+T retries. Model log: ${MODEL_SERVER_LOG}`;
       footer.fg = THEME.yellow;
     } finally {
       sending = false;
@@ -420,7 +442,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
   }
 
   async function send(): Promise<void> {
-    await sendText(input.value.trim());
+    await sendText(input.plainText.trim());
   }
 
   async function toggleVoice(): Promise<void> {
@@ -452,7 +474,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       cleanupVoiceRecording(session);
       if (!text) {
         addLine("Voice:", "No speech detected.", THEME.yellow);
-        footer.content = "  Enter send    PageUp/PageDown scroll    Escape dashboard";
+        footer.content = CHAT_FOOTER;
         footer.fg = THEME.dim;
         return;
       }
@@ -468,8 +490,30 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
     }
   }
 
-  input.on(InputRenderableEvents.ENTER, () => { void send(); });
   input.onKeyDown = (key) => {
+    if (isChatSendShortcut(key)) {
+      key.preventDefault();
+      key.stopPropagation();
+      void send();
+      return;
+    }
+    if (key.ctrl && key.name === "t") {
+      key.preventDefault();
+      key.stopPropagation();
+      const lastPrompt = promptHistory[promptHistory.length - 1];
+      if (lastPrompt && !sending) void sendText(lastPrompt);
+      return;
+    }
+    if (key.ctrl && (key.name === "p" || key.name === "n")) {
+      key.preventDefault();
+      key.stopPropagation();
+      if (promptHistoryIndex === promptHistory.length) promptDraft = input.plainText;
+      promptHistoryIndex = key.name === "p"
+        ? Math.max(0, promptHistoryIndex - 1)
+        : Math.min(promptHistory.length, promptHistoryIndex + 1);
+      input.setText(promptHistoryIndex === promptHistory.length ? promptDraft : (promptHistory[promptHistoryIndex] ?? ""));
+      return;
+    }
     if (isVoiceShortcut(key)) {
       key.preventDefault();
       key.stopPropagation();
@@ -487,13 +531,17 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
       onCancel();
       return;
     }
-    if (isTranscriptScrollKey(key, input.value.length === 0) && transcript.handleKeyPress(key)) {
+    if (isTranscriptScrollKey(key, input.plainText.length === 0) && transcript.handleKeyPress(key)) {
       key.preventDefault();
       key.stopPropagation();
     }
   };
 
-  addLine("System:", "Local chat stays inside OpenTUI. The server starts in the background if needed.", THEME.dim2);
+  if (sessionTranscript.length) {
+    for (const saved of sessionTranscript) addLine(saved.label, saved.content, saved.color, false);
+  } else {
+    addLine("System:", "Local chat stays inside OpenTUI. The server starts in the background if needed.", THEME.dim2);
+  }
   void ensureServer();
   input.focus();
   return screen;

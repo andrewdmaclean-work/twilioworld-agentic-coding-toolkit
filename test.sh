@@ -45,6 +45,7 @@ if command -v bun >/dev/null 2>&1; then
     TOOLKIT_TUI_SMOKE=1 bun run src/index.ts > /tmp/tui-boot-test.log 2>&1
     grep -q "TwilioWorld\|Skills\|Twilio CLI" /tmp/tui-boot-test.log
   '
+  check "OpenTUI interaction tests pass" bash -c 'cd tui && bun test src/screens/ui.test.ts'
 else
   echo "  SKIP bun checks (bun not installed)"
 fi
@@ -143,7 +144,7 @@ check "model reasoning is configurable" bash -c '
   grep -q "MODEL_REASONING" tui/src/lib/model.ts &&
   grep -q "modelReasoningMode" tui/src/lib/model.ts &&
   grep -q "setModelReasoningMode" tui/src/index.ts &&
-  grep -q "Model thinking:" tui/src/index.ts &&
+  grep -q "Model thinking:" tui/src/screens/model-controls.ts &&
   grep -q "validReasoning" tui/src/lib/model.ts &&
   grep -q "\"--reasoning\", MODEL_REASONING" tui/src/lib/model.ts &&
   grep -q "MODEL_REASONING=on" README.md &&
@@ -193,17 +194,18 @@ check "setup progress shows completed steps" bash -c '
   grep -q "stepDone(\"\\[6/6\\] Twilio Skills\"" tui/src/lib/setup.ts &&
   grep -q "line.startsWith(\"☑\")" tui/src/screens/log.ts
 '
-check "onboarding checklist reflects completed steps" bash -c '
-  grep -q "doneLabel" tui/src/screens/onboarding.ts &&
-  grep -q "☑" tui/src/screens/onboarding.ts &&
-  grep -q "☐" tui/src/screens/onboarding.ts &&
-  grep -q "devPhoneReady" tui/src/screens/onboarding.ts &&
-  grep -q "modelReady" tui/src/screens/onboarding.ts &&
-  grep -q "completed.agent" tui/src/screens/onboarding.ts &&
-  grep -q "onFinished(ok" tui/src/screens/agent.ts
+check "first run reuses resumable setup" bash -c '
+  ! test -f tui/src/screens/onboarding.ts &&
+  grep -q "firstRun" tui/src/screens/setup.ts &&
+  grep -q "writeConfig(current.addons, current.settings)" tui/src/screens/setup.ts &&
+  grep -q "Tools & settings" tui/src/screens/setup.ts
 '
 check "chat stays inside OpenTUI"     bash -c 'grep -q "buildChatScreen" tui/src/index.ts && ! grep -RIn "combinedArgs\\|chatArgs\\|--chat" tui/src 2>/dev/null'
-check "chat enter sends message"      bash -c 'grep -q "InputRenderableEvents.ENTER" tui/src/screens/chat.ts && ! grep -q "input.onSubmit" tui/src/screens/chat.ts'
+check "chat multiline composer sends explicitly" bash -c '
+  grep -q "TextareaRenderable" tui/src/screens/chat.ts &&
+  grep -q "isChatSendShortcut" tui/src/screens/chat.ts &&
+  grep -q "Ctrl+Enter send" tui/src/screens/chat.ts
+'
 check "chat supports tool calls"      bash -c 'grep -q "CHAT_TOOLS" tui/src/screens/chat.ts && grep -q "tool_choice" tui/src/screens/chat.ts && grep -q "runChatTool" tui/src/screens/chat.ts'
 check "chat streams model responses" bash -c '
   grep -q "streamChatCompletion" tui/src/screens/chat.ts &&
@@ -216,6 +218,12 @@ check "chat streams model responses" bash -c '
 check "chat disables markdown replies" bash -c 'grep -q "plainTextChatResponse" tui/src/screens/chat.ts && grep -q "plain text only" tui/src/screens/chat.ts && grep -q "Do not use Markdown" tui/src/screens/chat.ts'
 check "chat hides unfinished voice shortcut" bash -c 'grep -q "isVoiceShortcut" tui/src/screens/chat.ts && grep -q "key.ctrl" tui/src/screens/chat.ts && ! grep -q "Ctrl+R voice input is wired" tui/src/screens/chat.ts'
 check "chat transcript scroll is wired" bash -c 'grep -q "isTranscriptScrollKey" tui/src/screens/chat.ts && grep -q "transcript.handleKeyPress" tui/src/screens/chat.ts && grep -q "pageup" tui/src/screens/chat.ts'
+check "chat preserves history and supports retry" bash -c '
+  grep -q "sessionHistory" tui/src/screens/chat.ts &&
+  grep -q "sessionTranscript" tui/src/screens/chat.ts &&
+  grep -q "Ctrl+T retries" tui/src/screens/chat.ts &&
+  grep -q "promptHistoryIndex" tui/src/screens/chat.ts
+'
 check "chat can read skills"         bash -c 'grep -q "search_twilio_skills" tui/src/lib/chat-tools.ts && grep -q "read_twilio_skill" tui/src/lib/chat-tools.ts'
 check "chat skill search is cached" bash -c '
   grep -q "skillIndex" tui/src/lib/chat-tools.ts &&
@@ -232,7 +240,7 @@ check "index.ts has all menu items"   bash -c '
   grep -q '"'"'exit'"'"' tui/src/index.ts
 '
 check "signup opens TwilioWorld" bash -c '
-  grep -q "Sign up for TwilioWorld" tui/src/index.ts &&
+  grep -q "Sign up for TwilioWorld" tui/src/screens/tools.ts &&
   grep -q "https://twilio.world" tui/src/index.ts &&
   grep -q "export function openUrl" tui/src/lib/exec.ts
 '
@@ -242,10 +250,16 @@ check "Twilio AI Docs quick link wired" bash -c '
 '
 check "setup is reachable after onboarding" bash -c '
   grep -q "buildSetupScreen" tui/src/index.ts &&
-  grep -q "Setup choices" tui/src/index.ts &&
-  grep -q "Tools & settings" tui/src/index.ts
+  grep -q "Setup choices" tui/src/screens/tools.ts &&
+  grep -q "Tools & settings" tui/src/screens/tools.ts
 '
-check "agent picker offers GitHub Copilot" grep -q "GitHub Copilot" tui/src/screens/agent.ts
+check "agent picker offers GitHub Copilot" grep -q "GitHub Copilot" tui/src/lib/agents.ts
+check "agent picker reports detected state" bash -c '
+  test -f tui/src/lib/agents.ts &&
+  grep -q "agentPickerOptions" tui/src/screens/agent.ts &&
+  grep -q "Twilio configured" tui/src/lib/agents.ts &&
+  grep -q "checked on launch" tui/src/lib/agents.ts
+'
 check "README links Twilio AI docs" grep -q "https://www.twilio.com/docs/ai)" README.md
 check "terminal easter egg is wired" bash -c '
   grep -q "buildInvadersScreen" tui/src/index.ts &&
@@ -256,7 +270,7 @@ check "terminal easter egg is wired" bash -c '
 '
 check "README mirrors dashboard labels" bash -c '
   grep -q "Actions" README.md &&
-  grep -q "Install Choices" README.md &&
+  grep -q "Tools & settings" README.md &&
   grep -q "Selected Action" README.md &&
   grep -q "Sign up for TwilioWorld" README.md &&
   grep -q "TwilioWorld Agentic Coding Toolkit" README.md &&
@@ -305,6 +319,12 @@ check "status refreshes immediately after actions" bash -c '
   grep -q "function refreshStatus" tui/src/index.ts &&
   grep -q "onDone(ok)" tui/src/index.ts &&
   grep -q "void poll();" tui/src/index.ts
+'
+check "status reads are cached and invalidated" bash -c '
+  grep -q "STATUS_CACHE_MS" tui/src/status.ts &&
+  grep -q "statusInFlight" tui/src/status.ts &&
+  grep -q "invalidateStatusCache" tui/src/status.ts &&
+  grep -q "poll(true)" tui/src/index.ts
 '
 check "no suspend/resume left in index" bash -c '! grep -q "renderer.suspend\|renderer.resume" tui/src/index.ts'
 check "exec.ts has new-window opener" grep -q 'export function openInNewWindow' tui/src/lib/exec.ts
@@ -367,12 +387,18 @@ check "route transitions ignore carried enter" bash -c '
 '
 check "log dismissal uses explicit keys" bash -c '
   grep -q "isDismissKey" tui/src/screens/log.ts &&
-  grep -q "Enter, Escape, Space, or q" tui/src/screens/log.ts &&
+  grep -q "Enter/Escape return" tui/src/screens/log.ts &&
   grep -q "subtitle: \"\"" tui/src/screens/log.ts &&
   grep -q "if (opts.subtitle)" tui/src/screens/chrome.ts &&
   ! grep -q "press any key" tui/src/screens/log.ts &&
   ! grep -q "onLog(\"Starting task" tui/src/screens/log.ts &&
   ! grep -q "Streaming command output inside the OpenTUI session" tui/src/screens/log.ts
+'
+check "setup tasks support summary details and retry" bash -c '
+  grep -q "task-progress" tui/src/screens/log.ts &&
+  grep -q "D show details" tui/src/screens/log.ts &&
+  grep -q "R retry" tui/src/screens/log.ts &&
+  grep -q "startRun" tui/src/screens/log.ts
 '
 check "no gum references remain"      bash -c '! grep -RIn "\bgum\b" README.md uninstall.sh tui/src tui/package.json 2>/dev/null'
 check "no plain UI fallback remains"  bash -c '! grep -RIn "src/plain\|TOOLKIT_PLAIN\|--plain" toolkit tui/src tui/package.json 2>/dev/null'

@@ -6,7 +6,8 @@
   "description": "OpenTUI dashboard for the TwilioWorld AI Toolkit.",
   "scripts": {
     "start": "bun run src/index.ts",
-    "dev": "bun --watch run src/index.ts"
+    "dev": "bun --watch run src/index.ts",
+    "test": "bun test src/**/*.test.ts"
   },
   "dependencies": {
     "@opentui/core": "0.4.2"

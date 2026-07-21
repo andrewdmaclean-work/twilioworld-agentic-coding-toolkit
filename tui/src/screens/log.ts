@@ -84,7 +84,17 @@ export function buildLogScreen(
     stickyScroll: true,
     stickyStart: "bottom",
   });
+  const progress = new TextRenderable(renderer, {
+    id: "task-progress",
+    content: "Preparing task...",
+    fg: THEME.yellow,
+    visible: title.startsWith("Setup"),
+  });
+  body.add(progress);
   body.add(scroll);
+
+  let detailsVisible = !title.startsWith("Setup");
+  scroll.visible = detailsVisible;
 
   let lineCount = 0;
   let lastLogKey = "";
@@ -95,6 +105,11 @@ export function buildLogScreen(
     const logKey = `${stream}:${line}`;
     if (logKey === lastLogKey) return;
     lastLogKey = logKey;
+    const summary = line.replace(/^[✓☑✗⚠▶]\s*/, "").trim();
+    if (summary) {
+      progress.content = line.startsWith("☑") ? `Completed: ${summary}` : line.startsWith("▶") ? `Running: ${summary}` : summary;
+      progress.fg = colorFor(line, stream);
+    }
     lineCount++;
     scroll.content.add(
       new TextRenderable(renderer, {
@@ -105,25 +120,38 @@ export function buildLogScreen(
     );
   }
 
-  function onDone(ok: boolean) {
-    footer.content = ok
-      ? "  ✓  Done — press Enter, Escape, Space, or q to return"
-      : "  ✗  Finished with errors — press Enter, Escape, Space, or q to return";
-    footer.fg = ok ? THEME.green : ERR_COLOR;
+  let taskDone = false;
+  let taskOk = false;
 
-    // Wait for an explicit dismiss key before handing back to the dashboard.
-    const handler = (...args: unknown[]) => {
-      if (!dismissGuard.ready()) return;
-      if (!isDismissKey(args)) return;
-      renderer.keyInput.removeListener("keypress", handler);
-      onFinished(ok);
-    };
+  function onDone(ok: boolean) {
+    taskDone = true;
+    taskOk = ok;
+    progress.content = ok ? "Setup complete." : "Setup stopped with an error.";
+    progress.fg = ok ? THEME.green : ERR_COLOR;
+    footer.content = ok
+      ? "  ✓  Done    D details    Enter/Escape return"
+      : "  ✗  Failed    R retry    D details    Escape return";
+    footer.fg = ok ? THEME.green : ERR_COLOR;
     dismissGuard.arm();
-    renderer.keyInput.on("keypress", handler);
   }
 
   footer.content = "  Starting task...";
   footer.fg = THEME.yellow;
+
+  function clearLog(): void {
+    for (const child of [...scroll.content.getChildren()]) scroll.content.remove(child.id);
+    lineCount = 0;
+    lastLogKey = "";
+  }
+
+  function startRun(): void {
+    taskDone = false;
+    taskOk = false;
+    clearLog();
+    progress.content = "Preparing task...";
+    progress.fg = THEME.yellow;
+    footer.content = detailsVisible ? "  Running task...    D hide details" : "  Running task...    D show details";
+    footer.fg = THEME.yellow;
 
   // Yield at least one render frame before setup/uninstall begins. Those flows
   // do some synchronous local checks before their first subprocess, and starting
@@ -150,6 +178,28 @@ export function buildLogScreen(
       safeDone(false);
     }
   }, START_DELAY_MS);
+  }
+
+  const handler = (...args: unknown[]) => {
+    const key = args.find((arg) => arg && typeof arg === "object" && typeof (arg as { name?: unknown }).name === "string") as { name?: string } | undefined;
+    if (key?.name === "d") {
+      detailsVisible = !detailsVisible;
+      scroll.visible = detailsVisible;
+      footer.content = taskDone
+        ? (taskOk ? "  ✓  Done    D details    Enter/Escape return" : "  ✗  Failed    R retry    D details    Escape return")
+        : (detailsVisible ? "  Running task...    D hide details" : "  Running task...    D show details");
+      return;
+    }
+    if (taskDone && !taskOk && key?.name === "r") {
+      startRun();
+      return;
+    }
+    if (!taskDone || !dismissGuard.ready() || !isDismissKey(args)) return;
+    renderer.keyInput.removeListener("keypress", handler);
+    onFinished(taskOk);
+  };
+  renderer.keyInput.on("keypress", handler);
+  startRun();
 
   return screen;
 }
