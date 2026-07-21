@@ -76,8 +76,9 @@ export function checkPiReadiness(): PiReadiness {
 /** Install Pi capabilities then open Pi in a new terminal window.
  *  Returns once the window has been launched (or failed to launch) —
  *  does not wait for Pi itself to exit. */
-export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult> {
-  const { onLog } = opts;
+export async function launchPi(opts: { onLog: LogFn; mcpCreds?: string }): Promise<NewWindowResult> {
+  const { onLog, mcpCreds = "" } = opts;
+  const effectiveMcpCreds = mcpCreds || process.env.TWILIO_MCP_CREDS || "";
   const readiness = checkPiReadiness();
   if (!readiness.ok) {
     onLog(`✗ ${readiness.reason}`, "stderr");
@@ -98,7 +99,7 @@ export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult>
     env: { ...process.env, PI_CODING_AGENT_DIR: piDir },
     onLog,
   });
-  writePiMcpConfig(piDir);
+  writePiMcpConfig(piDir, effectiveMcpCreds);
 
   // Skills — always wired when the local Skills dir is present.
   if (existsSync(SKILLS_DIR)) {

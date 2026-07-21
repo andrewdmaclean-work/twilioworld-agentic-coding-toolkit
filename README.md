@@ -321,7 +321,7 @@ Docs MCP (HTTP, no auth):
     https://mcp.twilio.com/docs
 
 Execute MCP (experimental, stdio):
-    npx -y @twilio-alpha/mcp@0.6.0 "ACxxx/SKxxx:secret"
+    npx -y @twilio-alpha/mcp@0.6.0 "ACxxx/SKxxx:secret" --services twilio_api_v2010
 
 Skills (make them global):
     cp -r vendor/twilio-ai/skills/ ~/.agents/skills/

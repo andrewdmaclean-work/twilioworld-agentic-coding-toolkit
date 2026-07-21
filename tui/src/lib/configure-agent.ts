@@ -8,6 +8,7 @@ import { capture, have, openInNewWindow, runStreaming, type LogFn } from "./exec
 import { CONFIG_DIR, DOCS_MCP_URL, MODEL_SERVER_BASE_URL, PI_AGENT_PKG, ROOT, TWILIO_MCP_PKG } from "./constants.ts";
 import { launchPi } from "./pi.ts";
 import { pathNodeVersion, supportsPiNode } from "./node-version.ts";
+import { loadToolkitEnv } from "./env.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
 function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
@@ -16,9 +17,9 @@ function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 
 function printExecuteOneliner(mcpCreds: string, onLog: LogFn) {
   if (mcpCreds) {
-    say(`       npx -y ${TWILIO_MCP_PKG} "${mcpCreds}"`, onLog);
+    say(`       npx -y ${TWILIO_MCP_PKG} "${mcpCreds}" --services twilio_api_v2010`, onLog);
   } else {
-    say(`       npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret"   (add your creds)`, onLog);
+    say(`       npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret" --services twilio_api_v2010   (add your creds)`, onLog);
   }
 }
 
@@ -180,6 +181,7 @@ export async function configureAgent(opts: {
   onDone: (ok: boolean) => void;
 }): Promise<void> {
   const { agent, mcpCreds = "", onLog, onDone } = opts;
+  loadToolkitEnv();
 
   if (agent.startsWith("Pi")) {
     // ── Pi ───────────────────────────────────────────────────────────
@@ -214,12 +216,16 @@ export async function configureAgent(opts: {
     // Capabilities + launch — shared with the menu's own Pi path
     // (lib/pi.ts) so there's exactly one place that knows how to wire
     // Skills/MCP/model config and open Pi in a new terminal window.
-    if (mcpCreds) {
+    const effectiveCreds = mcpCreds || process.env.TWILIO_MCP_CREDS || "";
+    if (effectiveCreds) {
       say("", onLog);
-      say("   Exporting creds so the Execute MCP can authenticate:", onLog);
-      say(`       export TWILIO_MCP_CREDS="${mcpCreds}"`, onLog);
+      say("   Execute MCP creds found; Pi will include twilio-execute in mcp.json.", onLog);
+    } else {
+      say("", onLog);
+      warn("No TWILIO_MCP_CREDS loaded from the environment or .toolkit/.env; Pi will include Docs MCP only.", onLog);
+      say("   Run Twilio CLI → Enable Execute MCP (read-only), then re-run Configure agent → Pi.", onLog);
     }
-    await launchPi({ onLog });
+    await launchPi({ onLog, mcpCreds: effectiveCreds });
     warn("Local 2B model: keep the tool set small. For heavy MCP use, switch to a cloud /model inside Pi.", onLog);
 
   } else if (agent === "OpenCode") {
@@ -262,8 +268,8 @@ export async function configureAgent(opts: {
           await tryMcpAdd("claude", ["mcp", "add", "twilio-docs", "--transport", "http", DOCS_MCP_URL], l);
         },
         wireExecuteMcp: async (creds, l) => {
-          if (creds) { say("   Adding the Execute MCP…", l); await tryMcpAdd("claude", ["mcp", "add", "twilio-execute", "--", "npx", "-y", TWILIO_MCP_PKG, creds], l); }
-          else { say("   Add the Execute MCP once you have creds:", l); printExecuteOneliner(creds, l); say(`       claude mcp add twilio-execute -- npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret"`, l); }
+          if (creds) { say("   Adding the Execute MCP…", l); await tryMcpAdd("claude", ["mcp", "add", "twilio-execute", "--", "npx", "-y", TWILIO_MCP_PKG, creds, "--services", "twilio_api_v2010"], l); }
+          else { say("   Add the Execute MCP once you have creds:", l); printExecuteOneliner(creds, l); say(`       claude mcp add twilio-execute -- npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret" --services twilio_api_v2010`, l); }
         },
       },
       mcpCreds, onLog, onDone,
@@ -301,8 +307,8 @@ export async function configureAgent(opts: {
         },
         wireDocsMcp: async (l) => { say("   Adding the Docs MCP…", l); await tryMcpAdd("codex", ["mcp", "add", "twilio-docs", "--url", DOCS_MCP_URL], l); },
         wireExecuteMcp: async (creds, l) => {
-          if (creds) { say("   Adding the Execute MCP…", l); await tryMcpAdd("codex", ["mcp", "add", "twilio-execute", "--", "npx", "-y", TWILIO_MCP_PKG, creds], l); }
-          else { say("   Add the Execute MCP once you have creds:", l); printExecuteOneliner(creds, l); say(`       codex mcp add twilio-execute -- npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret"`, l); }
+          if (creds) { say("   Adding the Execute MCP…", l); await tryMcpAdd("codex", ["mcp", "add", "twilio-execute", "--", "npx", "-y", TWILIO_MCP_PKG, creds, "--services", "twilio_api_v2010"], l); }
+          else { say("   Add the Execute MCP once you have creds:", l); printExecuteOneliner(creds, l); say(`       codex mcp add twilio-execute -- npx -y ${TWILIO_MCP_PKG} "ACxxx/SKxxx:secret" --services twilio_api_v2010`, l); }
         },
       },
       mcpCreds, onLog, onDone,
