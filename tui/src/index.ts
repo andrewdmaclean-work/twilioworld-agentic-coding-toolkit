@@ -19,6 +19,7 @@ import { buildSubmenuScreen } from "./screens/submenu.ts";
 import { buildLogScreen } from "./screens/log.ts";
 import { buildOnboardingScreen } from "./screens/onboarding.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
+import { buildRobotFace } from "./screens/robot-face.ts";
 import {
   downloadLocalModel, installDevPhone, installTwilioCli,
   openDevPhone, openTwilioLogin, openTwilioTerminal, stopModelServer,
@@ -314,7 +315,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     title: " TwilioWorld Agentic Coding Toolkit ",
     titleColor: WHITE,
     paddingX: 1,
-    flexDirection: "column",
+    flexDirection: "row",
     backgroundColor: BG_PANEL,
   });
   // Small ASCII wordmark, stacked above the subtitle — @opentui/core ships
@@ -347,10 +348,18 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     content: `Next: ${nextMove(null)}`,
     fg: YELLOW,
   });
-  header.add(banner);
-  header.add(titleText);
-  header.add(headline);
-  header.add(nextText);
+  const brand = new BoxRenderable(renderer, {
+    id: "header-brand",
+    flexDirection: "column",
+    flexGrow: 1,
+  });
+  brand.add(banner);
+  brand.add(titleText);
+  brand.add(headline);
+  brand.add(nextText);
+  const robot = buildRobotFace(renderer);
+  header.add(brand);
+  header.add(robot.container);
 
   // Left column: menu
   const MENU_W = 36;
@@ -441,7 +450,9 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     // little breathing room so it doesn't sit flush against the border.
     const BANNER_MIN_WIDTH = 44 + 4 + 8;
     const wide = W >= BANNER_MIN_WIDTH;
+    const showRobot = W >= 74;
     banner.visible = wide;
+    robot.setVisible(showRobot);
     header.title = wide ? "" : " TwilioWorld Agentic Coding Toolkit ";
 
     const headerH = wide ? 7 : 5; // 2 banner rows + 3 text rows + 2 border, vs. 3 text rows + 2 border
@@ -470,9 +481,11 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     detailCol.height = detailH;
     detailCol.width  = rightW;
 
-    titleText.width = Math.max(10, W - 4);
-    headline.width = Math.max(10, W - 4);
-    nextText.width = Math.max(10, W - 4);
+    const brandWidth = Math.max(10, W - 4 - (showRobot ? 12 : 0));
+    brand.width = brandWidth;
+    titleText.width = brandWidth;
+    headline.width = brandWidth;
+    nextText.width = brandWidth;
     bottomBar.width = W;
   }
 
@@ -500,6 +513,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 
   function update(s: ToolkitStatus | null) {
     lastStatus = s;
+    robot.update(s);
     refreshHeaderAndAddon(s);
 
     const lines = statusLines(s).slice(0, STATUS_ROWS);
@@ -580,7 +594,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   }
 
   menuList.focus();
-  return { dashboard, menuList, bottomBar, update, showRoute, backRoute };
+  return { dashboard, menuList, bottomBar, update, showRoute, backRoute, dispose: robot.dispose };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
@@ -615,18 +629,21 @@ async function main() {
 
   let interval: ReturnType<typeof setInterval> | null = null;
   let shuttingDown = false;
+  let disposeDashboard = () => {};
 
   function shutdown(code = 0): void {
     if (shuttingDown) return;
     shuttingDown = true;
     if (interval) clearInterval(interval);
+    disposeDashboard();
     try { renderer.useMouse = false; } catch { /* ignore */ }
     try { renderer.destroy(); } catch { /* ignore */ }
     forceTerminalRestore();
     setTimeout(() => process.exit(code), 0);
   }
 
-  const { dashboard, menuList, bottomBar, update, showRoute, backRoute } = buildDashboard(renderer, () => shutdown(0));
+  const { dashboard, menuList, bottomBar, update, showRoute, backRoute, dispose } = buildDashboard(renderer, () => shutdown(0));
+  disposeDashboard = dispose;
 
   let busy = false;
 

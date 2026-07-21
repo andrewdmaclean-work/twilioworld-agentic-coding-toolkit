@@ -274,6 +274,14 @@ check "index.ts has ASCII wordmark banner" bash -c '
   grep -q "font: \"tiny\"" tui/src/index.ts &&
   grep -q "banner.visible" tui/src/index.ts
 '
+check "dashboard robot reflects state and cleans up" bash -c '
+  test -f tui/src/screens/robot-face.ts &&
+  grep -q "buildRobotFace" tui/src/index.ts &&
+  grep -q "model.running" tui/src/screens/robot-face.ts &&
+  grep -q "setInterval" tui/src/screens/robot-face.ts &&
+  grep -q "clearInterval" tui/src/screens/robot-face.ts &&
+  grep -q "disposeDashboard" tui/src/index.ts
+'
 check "agent picker has no Pi favoritism" bash -c '! grep -iq "recommended\|built-in" tui/src/screens/agent.ts'
 check "configure-agent launches Pi via lib/pi.ts" grep -q 'launchPi' tui/src/lib/configure-agent.ts
 check "configure-agent auto-installs Claude/Codex/Cursor/Copilot" bash -c '
