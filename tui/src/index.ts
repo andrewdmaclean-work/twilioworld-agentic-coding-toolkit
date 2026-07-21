@@ -18,6 +18,7 @@ import { buildChatScreen } from "./screens/chat.ts";
 import { buildSubmenuScreen } from "./screens/submenu.ts";
 import { buildLogScreen } from "./screens/log.ts";
 import { buildOnboardingScreen } from "./screens/onboarding.ts";
+import { buildSetupScreen } from "./screens/setup.ts";
 import {
   downloadLocalModel, installDevPhone, installTwilioCli,
   openDevPhone, openTwilioLogin, openTwilioTerminal, stopModelServer,
@@ -184,7 +185,7 @@ function statusLines(s: ToolkitStatus | null) {
 }
 
 // ── Menu definition ──────────────────────────────────────────────────
-type ItemId = "chat"|"agent"|"devphone"|"cli"|"resources"|"exit";
+type ItemId = "chat"|"agent"|"devphone"|"cli"|"tools"|"exit";
 
 interface MenuItem {
   id: ItemId;
@@ -218,9 +219,9 @@ const ALL_ITEMS: MenuItem[] = [
     detail: (s) => s?.twilio.sid ? `logged in as ${s.twilio.profile}` : s?.twilio.installed ? "installed, not logged in" : "open a terminal, log in, check account, or uninstall",
     visible: () => true },
 
-  { id: "resources",
-    label: () => "Resources",
-    detail: () => "TwilioWorld signup and Twilio AI Docs",
+  { id: "tools",
+    label: () => "Tools & settings",
+    detail: () => "install choices, TwilioWorld, and Twilio AI Docs",
     visible: () => true },
 
   { id: "exit",
@@ -290,14 +291,13 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
         `  Installed: ${yesNo(Boolean(s?.twilio.installed))}`,
         s?.twilio.sid ? `  Account: ${s.twilio.profile} (${s.twilio.sid})` : "  Not logged in",
       ].join("\n");
-    case "resources":
+    case "tools":
       return [
-        "Purpose",
-        "  Open a Twilio resource in your browser.",
+        "Manage",
+        "  Change install choices or run Setup again.",
         "",
-        "Choose from",
-        "  * Sign up for TwilioWorld — https://twilio.world",
-        "  * Twilio AI Docs — https://www.twilio.com/docs/ai",
+        "Resources",
+        "  TwilioWorld and Twilio AI Docs.",
       ].join("\n");
   }
 }
@@ -692,15 +692,23 @@ async function main() {
 
       case "agent": busy = true; showRoute(buildAgentScreen(renderer, back, back), "Configure Agent"); break;
 
-      case "resources": {
+      case "tools": {
         busy = true;
         showRoute(buildSubmenuScreen(renderer, {
-          id: "resources-screen",
-          route: "Dashboard / Resources",
-          title: "Resources",
-          subtitle: "Open a Twilio resource in your browser. Escape returns to dashboard.",
-          bodyTitle: "Resources",
+          id: "tools-screen",
+          route: "Dashboard / Tools & settings",
+          title: "Tools & settings",
+          subtitle: "Manage optional components or open project resources.",
+          bodyTitle: "Tools & settings",
           options: [
+            {
+              name: "Setup choices",
+              description: "install optional components or save choices for later",
+              onSelect: () => {
+                showRoute(buildSetupScreen(renderer, back, back), "Setup");
+                return false;
+              },
+            },
             {
               name: "Sign up for TwilioWorld",
               description: "open twilio.world in your browser",
@@ -720,7 +728,7 @@ async function main() {
               },
             },
           ],
-        }, back), "Resources");
+        }, back), "Tools & settings");
         break;
       }
 

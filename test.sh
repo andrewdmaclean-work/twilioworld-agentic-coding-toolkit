@@ -228,7 +228,7 @@ check "index.ts has all menu items"   bash -c '
   grep -q '"'"'agent'"'"' tui/src/index.ts &&
   grep -q '"'"'devphone'"'"' tui/src/index.ts &&
   grep -q '"'"'cli'"'"' tui/src/index.ts &&
-  grep -q '"'"'resources'"'"' tui/src/index.ts &&
+  grep -q '"'"'tools'"'"' tui/src/index.ts &&
   grep -q '"'"'exit'"'"' tui/src/index.ts
 '
 check "signup opens TwilioWorld" bash -c '
@@ -239,6 +239,11 @@ check "signup opens TwilioWorld" bash -c '
 check "Twilio AI Docs quick link wired" bash -c '
   grep -q "Twilio AI Docs" tui/src/index.ts &&
   grep -q "https://www.twilio.com/docs/ai" tui/src/index.ts
+'
+check "setup is reachable after onboarding" bash -c '
+  grep -q "buildSetupScreen" tui/src/index.ts &&
+  grep -q "Setup choices" tui/src/index.ts &&
+  grep -q "Tools & settings" tui/src/index.ts
 '
 check "agent picker offers GitHub Copilot" grep -q "GitHub Copilot" tui/src/screens/agent.ts
 check "README links Twilio AI docs" grep -q "https://www.twilio.com/docs/ai)" README.md
