@@ -2,8 +2,7 @@
 //
 // Renders a list of choices inside the standard embedded route chrome.
 // Each choice carries an onSelect callback. Escape/q returns to the
-// dashboard via onCancel. Used for the "Chat with Twilio" (TUI vs GUI)
-// and "Twilio links" submenus.
+// dashboard via onCancel. Used by secondary routes throughout the toolkit.
 
 import {
   BoxRenderable,
@@ -11,9 +10,9 @@ import {
   SelectRenderableEvents,
   type CliRenderer,
 } from "@opentui/core";
-import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
+import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 
 export interface SubmenuOption {
   name: string;
@@ -41,7 +40,7 @@ export function buildSubmenuScreen(
     title: opts.title,
     subtitle: opts.subtitle,
     bodyTitle: opts.bodyTitle,
-    footer: "  Escape dashboard    Enter select",
+    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
   });
 
   const select = new SelectRenderable(renderer, {
@@ -50,14 +49,7 @@ export function buildSubmenuScreen(
     flexGrow: 1,
     flexShrink: 0,
     options: opts.options.map((o, i) => ({ name: o.name, description: o.description, value: String(i) })),
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.silver,
-    selectedBackgroundColor: THEME.bgSelected,
-    selectedTextColor: THEME.white,
-    descriptionColor: THEME.dim2,
-    selectedDescriptionColor: THEME.silver,
+    ...SELECT_STYLE,
   });
 
   const selectGuard = createInputGuard();

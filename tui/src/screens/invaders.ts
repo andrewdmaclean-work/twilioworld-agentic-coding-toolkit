@@ -5,6 +5,7 @@ import {
   type KeyEvent,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
+import { shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 
 interface Enemy {
@@ -29,7 +30,7 @@ export function buildInvadersScreen(renderer: CliRenderer, onCancel: () => void)
     title: "Signal Invaders",
     subtitle: "Defend the terminal uplink.",
     bodyTitle: "Arcade",
-    footer: "  Left/Right move    Space fire    R restart    Escape dashboard",
+    footer: shortcutBar(["←→", "move"], ["Space", "fire"], ["R", "restart"], ["Esc", "dashboard"]),
   });
   screen.focusable = true;
 

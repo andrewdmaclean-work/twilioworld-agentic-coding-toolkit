@@ -5,9 +5,9 @@ import { LOCAL_MODEL_SIZE_LABEL, MODEL_SERVER_PORT } from "../lib/constants.ts";
 import { buildSubmenuScreen } from "./submenu.ts";
 
 function reasoningLabel(mode: ModelReasoningMode): string {
-  if (mode === "on") return "On";
-  if (mode === "auto") return "Auto";
-  return "Off";
+  if (mode === "on") return "Thoughtful";
+  if (mode === "auto") return "Balanced";
+  return "Fast";
 }
 
 export function buildModelControlsScreen(
@@ -25,14 +25,14 @@ export function buildModelControlsScreen(
 ): BoxRenderable {
   return buildSubmenuScreen(renderer, {
     id: "model-controls-screen",
-    route: "Dashboard / Tools & settings / Local model",
-    title: "Local model",
-    subtitle: "Browser UI, response mode, storage, and process controls.",
-    bodyTitle: "Local model",
+    route: "Dashboard / Settings / Local AI model",
+    title: "Local AI model",
+    subtitle: "Use browser chat, choose a response style, or manage local files.",
+    bodyTitle: "Local AI model",
     options: [
       {
-        name: "Open browser UI",
-        description: opts.status?.model.ready ? "start the model if needed, then open the web UI" : "download the model from Setup choices first",
+        name: "Open browser chat",
+        description: opts.status?.model.ready ? "start the model if needed, then open chat in your browser" : "install Local Chat from Components first",
         onSelect: () => {
           if (!opts.status?.model.ready) { opts.onMissingModel(); return false; }
           opts.onOpenBrowser();
@@ -40,18 +40,18 @@ export function buildModelControlsScreen(
         },
       },
       {
-        name: `Model thinking: ${reasoningLabel(opts.reasoningMode)}`,
-        description: opts.reasoningMode === "off" ? "faster replies; Enter turns thinking on" : "more deliberate replies; Enter turns thinking off",
+        name: `Response style: ${reasoningLabel(opts.reasoningMode)}`,
+        description: opts.reasoningMode === "off" ? "faster replies; Enter switches to Thoughtful" : "more deliberate replies; Enter switches to Fast",
         onSelect: () => { opts.onToggleReasoning(); return true; },
       },
       {
-        name: "Stop model server",
-        description: opts.status?.model.running ? `running on :${MODEL_SERVER_PORT}` : "not running",
+        name: "Stop local AI",
+        description: opts.status?.model.running ? `currently running on :${MODEL_SERVER_PORT}` : "the local AI is not running",
         onSelect: () => { opts.onStop(); return true; },
       },
       {
-        name: "Remove local model",
-        description: opts.status?.model.ready ? `delete model and runtime (~${LOCAL_MODEL_SIZE_LABEL})` : "nothing downloaded",
+        name: "Remove downloaded model",
+        description: opts.status?.model.ready ? `free approximately ${LOCAL_MODEL_SIZE_LABEL} of local storage` : "no model files are installed",
         onSelect: () => { opts.onRemove(); return false; },
       },
     ],

@@ -144,7 +144,7 @@ check "model reasoning is configurable" bash -c '
   grep -q "MODEL_REASONING" tui/src/lib/model.ts &&
   grep -q "modelReasoningMode" tui/src/lib/model.ts &&
   grep -q "setModelReasoningMode" tui/src/index.ts &&
-  grep -q "Model thinking:" tui/src/screens/model-controls.ts &&
+  grep -q "Response style:" tui/src/screens/model-controls.ts &&
   grep -q "validReasoning" tui/src/lib/model.ts &&
   grep -q "\"--reasoning\", MODEL_REASONING" tui/src/lib/model.ts &&
   grep -q "MODEL_REASONING=on" README.md &&
@@ -198,7 +198,7 @@ check "first run reuses resumable setup" bash -c '
   ! test -f tui/src/screens/onboarding.ts &&
   grep -q "firstRun" tui/src/screens/setup.ts &&
   grep -q "writeConfig(current.addons, current.settings)" tui/src/screens/setup.ts &&
-  grep -q "Tools & settings" tui/src/screens/setup.ts
+  grep -q "from Settings" tui/src/screens/setup.ts
 '
 check "chat stays inside OpenTUI"     bash -c 'grep -q "buildChatScreen" tui/src/index.ts && ! grep -RIn "combinedArgs\\|chatArgs\\|--chat" tui/src 2>/dev/null'
 check "chat multiline composer sends explicitly" bash -c '
@@ -236,22 +236,24 @@ check "index.ts has all menu items"   bash -c '
   grep -q '"'"'agent'"'"' tui/src/index.ts &&
   grep -q '"'"'devphone'"'"' tui/src/index.ts &&
   grep -q '"'"'cli'"'"' tui/src/index.ts &&
-  grep -q '"'"'tools'"'"' tui/src/index.ts &&
+  grep -q '"'"'resources'"'"' tui/src/index.ts &&
+  grep -q '"'"'settings'"'"' tui/src/index.ts &&
   grep -q '"'"'exit'"'"' tui/src/index.ts
 '
 check "signup opens TwilioWorld" bash -c '
-  grep -q "Sign up for TwilioWorld" tui/src/screens/tools.ts &&
+  grep -q "TwilioWorld" tui/src/screens/resources.ts &&
   grep -q "https://twilio.world" tui/src/index.ts &&
   grep -q "export function openUrl" tui/src/lib/exec.ts
 '
 check "Twilio AI Docs quick link wired" bash -c '
-  grep -q "Twilio AI Docs" tui/src/index.ts &&
+  grep -q "Twilio AI Docs" tui/src/screens/resources.ts &&
   grep -q "https://www.twilio.com/docs/ai" tui/src/index.ts
 '
 check "setup is reachable after onboarding" bash -c '
   grep -q "buildSetupScreen" tui/src/index.ts &&
-  grep -q "Setup choices" tui/src/screens/tools.ts &&
-  grep -q "Tools & settings" tui/src/screens/tools.ts
+  grep -q "Components" tui/src/screens/settings.ts &&
+  grep -q "Local AI model" tui/src/screens/settings.ts &&
+  grep -q "Dashboard / Settings" tui/src/screens/settings.ts
 '
 check "agent picker offers GitHub Copilot" grep -q "GitHub Copilot" tui/src/lib/agents.ts
 check "agent picker reports detected state" bash -c '
@@ -270,9 +272,11 @@ check "terminal easter egg is wired" bash -c '
 '
 check "README mirrors dashboard labels" bash -c '
   grep -q "Actions" README.md &&
-  grep -q "Tools & settings" README.md &&
-  grep -q "Selected Action" README.md &&
-  grep -q "Sign up for TwilioWorld" README.md &&
+  grep -q "Resources" README.md &&
+  grep -q "Settings" README.md &&
+  grep -q "System status" README.md &&
+  grep -q "OVERVIEW" README.md &&
+  grep -q "TwilioWorld" README.md &&
   grep -q "TwilioWorld Agentic Coding Toolkit" README.md &&
   grep -q "twilioworld-agentic-coding-toolkit" README.md
 '
@@ -294,6 +298,7 @@ check "dashboard robot reflects state and cleans up" bash -c '
   grep -q "model.running" tui/src/screens/robot-face.ts &&
   grep -q "setInterval" tui/src/screens/robot-face.ts &&
   grep -q "clearInterval" tui/src/screens/robot-face.ts &&
+  grep -q "robot.react" tui/src/index.ts &&
   grep -q "disposeDashboard" tui/src/index.ts
 '
 check "agent picker has no Pi favoritism" bash -c '! grep -iq "recommended\|built-in" tui/src/screens/agent.ts'
@@ -387,7 +392,7 @@ check "route transitions ignore carried enter" bash -c '
 '
 check "log dismissal uses explicit keys" bash -c '
   grep -q "isDismissKey" tui/src/screens/log.ts &&
-  grep -q "Enter/Escape return" tui/src/screens/log.ts &&
+  grep -q "\\[\\\"Enter\\\", \\\"return\\\"\\]" tui/src/screens/log.ts &&
   grep -q "subtitle: \"\"" tui/src/screens/log.ts &&
   grep -q "if (opts.subtitle)" tui/src/screens/chrome.ts &&
   ! grep -q "press any key" tui/src/screens/log.ts &&
@@ -396,8 +401,8 @@ check "log dismissal uses explicit keys" bash -c '
 '
 check "setup tasks support summary details and retry" bash -c '
   grep -q "task-progress" tui/src/screens/log.ts &&
-  grep -q "D show details" tui/src/screens/log.ts &&
-  grep -q "R retry" tui/src/screens/log.ts &&
+  grep -q "\\[\\\"D\\\", \\\"show details\\\"\\]" tui/src/screens/log.ts &&
+  grep -q "\\[\\\"R\\\", \\\"retry\\\"\\]" tui/src/screens/log.ts &&
   grep -q "startRun" tui/src/screens/log.ts
 '
 check "no gum references remain"      bash -c '! grep -RIn "\bgum\b" README.md uninstall.sh tui/src tui/package.json 2>/dev/null'

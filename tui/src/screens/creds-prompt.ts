@@ -15,6 +15,7 @@ import {
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
+import { INPUT_STYLE, shortcutBar } from "../ui-style.ts";
 
 export function buildCredsPromptScreen(
   renderer: CliRenderer,
@@ -30,6 +31,7 @@ export function buildCredsPromptScreen(
     title: "Enter Twilio credentials",
     subtitle: "Account SID + Auth Token. Used once to create a read-only key; the token is not saved. Tab switches fields, Enter submits, Escape cancels.",
     bodyTitle: "Credentials",
+    footer: shortcutBar(["Tab", "switch field"], ["Enter", "continue"], ["Esc", "cancel"]),
   });
 
   const note = new TextRenderable(renderer, {
@@ -45,11 +47,7 @@ export function buildCredsPromptScreen(
     id: "creds-sid",
     value: opts.prefillSid ?? "",
     placeholder: "AC…",
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.white,
-    placeholderColor: THEME.dim2,
+    ...INPUT_STYLE,
   });
   body.add(sidInput);
 
@@ -59,11 +57,7 @@ export function buildCredsPromptScreen(
     id: "creds-token",
     value: "",
     placeholder: "your auth token",
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.white,
-    placeholderColor: THEME.dim2,
+    ...INPUT_STYLE,
   });
   body.add(tokenInput);
 

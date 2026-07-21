@@ -14,10 +14,11 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
+import { shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
-const ERR_COLOR = "#EF4444";
+const ERR_COLOR = THEME.danger;
 const START_DELAY_MS = 75;
 
 function isDismissKey(args: unknown[]): boolean {
@@ -75,7 +76,7 @@ export function buildLogScreen(
     title,
     subtitle: "",
     bodyTitle: "Live Output",
-    footer: "  In-app task log    Waiting for command output",
+    footer: shortcutBar(["D", "details"]),
   });
 
   const scroll = new ScrollBoxRenderable(renderer, {
@@ -86,18 +87,27 @@ export function buildLogScreen(
   });
   const progress = new TextRenderable(renderer, {
     id: "task-progress",
-    content: "Preparing task...",
+    content: "  ◌  Preparing task",
     fg: THEME.yellow,
-    visible: title.startsWith("Setup"),
+    visible: true,
+  });
+  const timeline = new TextRenderable(renderer, {
+    id: "task-timeline",
+    content: "",
+    fg: THEME.silver,
   });
   body.add(progress);
+  body.add(timeline);
   body.add(scroll);
 
   let detailsVisible = !title.startsWith("Setup");
   scroll.visible = detailsVisible;
+  timeline.visible = !detailsVisible;
 
   let lineCount = 0;
   let lastLogKey = "";
+  let startedAt = Date.now();
+  const recentSteps: string[] = [];
   const dismissGuard = createInputGuard();
 
   function onLog(line: string, stream: "stdout" | "stderr") {
@@ -107,8 +117,23 @@ export function buildLogScreen(
     lastLogKey = logKey;
     const summary = line.replace(/^[✓☑✗⚠▶]\s*/, "").trim();
     if (summary) {
-      progress.content = line.startsWith("☑") ? `Completed: ${summary}` : line.startsWith("▶") ? `Running: ${summary}` : summary;
+      const marker = line.startsWith("✓") || line.startsWith("☑") ? "●" : line.startsWith("✗") ? "!" : line.startsWith("⚠") ? "!" : "◌";
+      const numeric = summary.match(/\[(\d+)\/(\d+)\]/);
+      const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+      if (numeric) {
+        const current = Number(numeric[1]);
+        const total = Math.max(1, Number(numeric[2]));
+        const filled = Math.min(18, Math.round((current / total) * 18));
+        progress.content = `  ${"█".repeat(filled)}${"░".repeat(18 - filled)}  ${current}/${total}  ${elapsed}s`;
+      } else {
+        progress.content = `  ${marker}  ${summary}  ${elapsed}s`;
+      }
       progress.fg = colorFor(line, stream);
+      if (/^[✓☑✗⚠▶]/.test(line)) {
+        recentSteps.push(`  ${marker}  ${summary}`);
+        while (recentSteps.length > 8) recentSteps.shift();
+        timeline.content = recentSteps.join("\n");
+      }
     }
     lineCount++;
     scroll.content.add(
@@ -126,11 +151,12 @@ export function buildLogScreen(
   function onDone(ok: boolean) {
     taskDone = true;
     taskOk = ok;
-    progress.content = ok ? "Setup complete." : "Setup stopped with an error.";
+    const elapsed = Math.max(0, Math.floor((Date.now() - startedAt) / 1000));
+    progress.content = ok ? `  ●  Task complete  ${elapsed}s` : `  !  Task failed  ${elapsed}s`;
     progress.fg = ok ? THEME.green : ERR_COLOR;
     footer.content = ok
-      ? "  ✓  Done    D details    Enter/Escape return"
-      : "  ✗  Failed    R retry    D details    Escape return";
+      ? shortcutBar(["D", "details"], ["Enter", "return"])
+      : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]);
     footer.fg = ok ? THEME.green : ERR_COLOR;
     dismissGuard.arm();
   }
@@ -142,15 +168,18 @@ export function buildLogScreen(
     for (const child of [...scroll.content.getChildren()]) scroll.content.remove(child.id);
     lineCount = 0;
     lastLogKey = "";
+    recentSteps.length = 0;
+    timeline.content = "";
   }
 
   function startRun(): void {
     taskDone = false;
     taskOk = false;
+    startedAt = Date.now();
     clearLog();
-    progress.content = "Preparing task...";
+    progress.content = "  ◌  Preparing task";
     progress.fg = THEME.yellow;
-    footer.content = detailsVisible ? "  Running task...    D hide details" : "  Running task...    D show details";
+    footer.content = detailsVisible ? shortcutBar(["D", "hide details"]) : shortcutBar(["D", "show details"]);
     footer.fg = THEME.yellow;
 
   // Yield at least one render frame before setup/uninstall begins. Those flows
@@ -185,9 +214,10 @@ export function buildLogScreen(
     if (key?.name === "d") {
       detailsVisible = !detailsVisible;
       scroll.visible = detailsVisible;
+      timeline.visible = !detailsVisible;
       footer.content = taskDone
-        ? (taskOk ? "  ✓  Done    D details    Enter/Escape return" : "  ✗  Failed    R retry    D details    Escape return")
-        : (detailsVisible ? "  Running task...    D hide details" : "  Running task...    D show details");
+        ? (taskOk ? shortcutBar(["D", "details"], ["Enter", "return"]) : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]))
+        : (detailsVisible ? shortcutBar(["D", "hide details"]) : shortcutBar(["D", "show details"]));
       return;
     }
     if (taskDone && !taskOk && key?.name === "r") {

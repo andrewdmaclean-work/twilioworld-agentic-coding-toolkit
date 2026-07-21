@@ -17,6 +17,7 @@ import {
   type VoiceSession,
 } from "../lib/voice.ts";
 import { THEME } from "../theme.ts";
+import { INPUT_STYLE } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 
 type ChatMessage = {
@@ -123,6 +124,14 @@ export function plainTextChatResponse(text: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+function toolActivity(name: string): string {
+  if (name === "get_toolkit_status") return "Reading toolkit status";
+  if (name === "get_addon_config") return "Reading component settings";
+  if (name.includes("docs")) return "Checking Twilio Docs";
+  if (name.includes("skill")) return "Checking Twilio Skills";
+  return "Checking local sources";
 }
 
 function visibleAssistantText(text: string): string {
@@ -251,9 +260,9 @@ async function streamChatCompletion(
 export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): BoxRenderable {
   const { screen, body, footer } = buildEmbeddedRouteChrome(renderer, {
     id: "chat-screen",
-    route: "Dashboard / Chat",
-    title: "Chat with Twilio Docs",
-    subtitle: "Local AI chat, grounded in Twilio Skills and Docs MCP.",
+    route: "Dashboard / Ask Twilio",
+    title: "Ask Twilio",
+    subtitle: "Private local answers grounded in Twilio Skills and documentation.",
     bodyTitle: "Conversation",
     footer: CHAT_FOOTER,
   });
@@ -268,9 +277,9 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
   const inputShell = new BoxRenderable(renderer, {
     id: "chat-input-shell",
     borderStyle: "single",
-    borderColor: THEME.redDim,
+    borderColor: THEME.borderStrong,
     title: " Message ",
-    titleColor: THEME.red,
+    titleColor: THEME.redSoft,
     height: 5,
     paddingX: 1,
     backgroundColor: THEME.panelBg,
@@ -278,13 +287,9 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
   const input = new TextareaRenderable(renderer, {
     id: "chat-input",
     initialValue: "",
-    placeholder: "Ask the local model... Enter adds a line.",
+    placeholder: "Ask a Twilio question... Enter adds a line.",
     wrapMode: "word",
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.white,
-    placeholderColor: THEME.dim2,
+    ...INPUT_STYLE,
   });
   inputShell.add(input);
 
@@ -387,7 +392,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
         let streamed = "";
         let firstTextAt = 0;
         const startedAt = Date.now();
-        const assistantLine = addLine("Gemma:", "working...", THEME.silver);
+        const assistantLine = addLine("Assistant:", "working...", THEME.silver);
         footer.content = turn === 0
           ? "  Prompt processing locally..."
           : "  Tool result sent — summarizing locally...";
@@ -397,18 +402,18 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
             firstTextAt = Date.now();
             footer.content = `  Streaming local model response... first text in ${Math.max(1, Math.round((firstTextAt - startedAt) / 1000))}s`;
           }
-          updateLine(assistantLine, "Gemma:", visibleText || "working...");
+          updateLine(assistantLine, "Assistant:", visibleText || "working...");
           footer.fg = THEME.yellow;
         });
         const toolCalls = message.tool_calls ?? [];
         if (!toolCalls.length) {
           reply = streamed || visibleAssistantText(message.content ?? "") || "(empty response)";
-          updateLine(assistantLine, "Gemma:", reply);
+          updateLine(assistantLine, "Assistant:", reply);
           wroteReply = true;
           break;
         }
 
-        updateLine(assistantLine, "Gemma:", "checking Twilio tools...");
+        updateLine(assistantLine, "Assistant:", "checking Twilio sources...");
         history.push({
           role: "assistant",
           content: visibleAssistantText(message.content ?? ""),
@@ -417,7 +422,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
 
         for (const call of toolCalls) {
           const toolResult = await runChatTool(call);
-          addLine("Tool:", toolResult.name, THEME.cyan);
+          addLine("Source:", toolActivity(toolResult.name), THEME.cyan);
           history.push({
             role: "tool",
             tool_call_id: call.id,
@@ -427,12 +432,12 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
         }
       }
       if (!reply) reply = "I called tools, but the local model did not produce a final answer.";
-      if (!wroteReply) addLine("Gemma:", reply, THEME.silver);
+      if (!wroteReply) addLine("Assistant:", reply, THEME.silver);
       history.push({ role: "assistant", content: reply });
       footer.content = CHAT_FOOTER;
       footer.fg = THEME.dim;
     } catch (e) {
-      addLine("Gemma:", (e as Error).message, THEME.yellow);
+      addLine("Assistant:", (e as Error).message, THEME.yellow);
       footer.content = `  Request failed. Ctrl+T retries. Model log: ${MODEL_SERVER_LOG}`;
       footer.fg = THEME.yellow;
     } finally {
@@ -540,7 +545,7 @@ export function buildChatScreen(renderer: CliRenderer, onCancel: () => void): Bo
   if (sessionTranscript.length) {
     for (const saved of sessionTranscript) addLine(saved.label, saved.content, saved.color, false);
   } else {
-    addLine("System:", "Local chat stays inside OpenTUI. The server starts in the background if needed.", THEME.dim2);
+    addLine("System:", "Ready for Twilio questions.", THEME.dim2);
   }
   void ensureServer();
   input.focus();

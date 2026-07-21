@@ -10,6 +10,7 @@ import { LOCAL_MODEL_SIZE_LABEL } from "../lib/constants.ts";
 import { modelReady } from "../lib/model.ts";
 import { runSetup } from "../lib/setup.ts";
 import { THEME } from "../theme.ts";
+import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
@@ -33,11 +34,11 @@ function buildAddonItems(): SetupItem[] {
   const localDone = model.runtime && model.weights;
   const devDone = devPhoneInstalled();
   return [
-    { key: "__local", label: "Local chat", description: localDone ? "Done." : "Installs the model used by Chat with Twilio.", heading: true },
+    { key: "__local", label: "Ask Twilio", description: localDone ? "Done." : "Installs the private local AI model.", heading: true },
     {
       key: "localGemma" as AddonKey,
-      label: doneLabel(localDone, "Local model for Chat with Twilio"),
-      description: localDone ? "Downloaded and ready." : `Required for in-app local chat and Pi (~${LOCAL_MODEL_SIZE_LABEL})`,
+      label: doneLabel(localDone, "Local AI model"),
+      description: localDone ? "Downloaded and ready." : `Required for Ask Twilio and Pi (~${LOCAL_MODEL_SIZE_LABEL})`,
       done: localDone,
     },
     { key: "__tools", label: "Twilio tools", description: devDone ? "Done." : "Optional local tools.", heading: true },
@@ -65,15 +66,15 @@ export function buildSetupScreen(
 
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "setup-screen",
-    route: opts.firstRun ? "Welcome" : "Dashboard / Setup",
-    title: opts.firstRun ? "Set up your toolkit" : "Choose what to install",
+    route: opts.firstRun ? "Welcome" : "Dashboard / Settings / Components",
+    title: opts.firstRun ? "Set up your toolkit" : "Components",
     subtitle: opts.firstRun
       ? "Choose what you need now. You can change these choices later."
       : "Space toggles install choices. Enter saves. Escape returns to dashboard.",
-    bodyTitle: "Install Choices",
+    bodyTitle: "Choose components to install",
     footer: opts.firstRun
-      ? "  Escape use defaults    Space toggle choice    Enter continue"
-      : "  Escape dashboard    Space toggle choice    Enter save",
+      ? shortcutBar(["Esc", "use defaults"], ["Space", "toggle"], ["Enter", "continue"])
+      : shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "save"]),
   });
 
   const checklist = new CheckList(renderer, "addon-pick", addonItems, initialChecked);
@@ -85,16 +86,9 @@ export function buildSetupScreen(
     id: "confirm-select", height: 4, flexGrow: 1, flexShrink: 0, visible: false,
     options: [
       { name: "Install selected components", description: "Runs setup here and shows progress" },
-      { name: opts.firstRun ? "Continue without installing" : "Save choices only", description: "Install these components later from Tools & settings" },
+      { name: opts.firstRun ? "Continue without installing" : "Save choices only", description: "Install these components later from Settings" },
     ],
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.silver,
-    selectedBackgroundColor: THEME.bgSelected,
-    selectedTextColor: THEME.white,
-    descriptionColor: THEME.dim2,
-      selectedDescriptionColor: THEME.silver,
+    ...SELECT_STYLE,
   });
   const confirmGuard = createInputGuard();
   confirmSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index) => {

@@ -8,7 +8,7 @@ import {
 } from "@opentui/core";
 import { configureAgent } from "../lib/configure-agent.ts";
 import { agentPickerOptions } from "../lib/agents.ts";
-import { THEME } from "../theme.ts";
+import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
@@ -25,7 +25,7 @@ export function buildAgentScreen(
     title: "Configure agent",
     subtitle: "Choose the agent integration to wire. Escape returns to dashboard.",
     bodyTitle: "Agents",
-    footer: "  Escape dashboard    Enter configure",
+    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "configure"]),
   });
 
   const select = new SelectRenderable(renderer, {
@@ -34,14 +34,7 @@ export function buildAgentScreen(
     flexGrow: 1,
     flexShrink: 0,
     options: agentOptions,
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.silver,
-    selectedBackgroundColor: THEME.bgSelected,
-    selectedTextColor: THEME.white,
-    descriptionColor: THEME.dim2,
-    selectedDescriptionColor: THEME.silver,
+    ...SELECT_STYLE,
   });
 
   const selectGuard = createInputGuard();

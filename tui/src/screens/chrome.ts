@@ -4,6 +4,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
+import { shortcutBar } from "../ui-style.ts";
 
 interface RouteChromeOptions {
   id: string;
@@ -34,10 +35,10 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
 
   const header = new BoxRenderable(renderer, {
     id: `${opts.id}-header`,
-    borderStyle: "double",
-    borderColor: THEME.red,
-    title: " TwilioWorld Agentic Coding Toolkit ",
-    titleColor: THEME.white,
+    borderStyle: "single",
+    borderColor: THEME.borderStrong,
+    title: " TwilioWorld ",
+    titleColor: THEME.red,
     paddingX: 1,
     flexDirection: "column",
     backgroundColor: THEME.panelBg,
@@ -45,7 +46,7 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
   header.add(new TextRenderable(renderer, {
     id: `${opts.id}-route`,
     content: opts.route,
-    fg: THEME.cyan,
+    fg: THEME.dim2,
   }));
   header.add(new TextRenderable(renderer, {
     id: `${opts.id}-title`,
@@ -56,16 +57,16 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
     header.add(new TextRenderable(renderer, {
       id: `${opts.id}-subtitle`,
       content: opts.subtitle,
-      fg: THEME.yellow,
+      fg: THEME.dim2,
     }));
   }
 
   const body = new BoxRenderable(renderer, {
     id: `${opts.id}-body`,
     borderStyle: "single",
-    borderColor: THEME.redDim,
+    borderColor: THEME.border,
     title: ` ${opts.bodyTitle} `,
-    titleColor: THEME.red,
+    titleColor: THEME.redSoft,
     flexDirection: "column",
     flexGrow: 1,
     gap: 1,
@@ -75,8 +76,8 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
 
   const footer = new TextRenderable(renderer, {
     id: `${opts.id}-footer`,
-    content: opts.footer ?? "  Escape dashboard    Enter select",
-    fg: THEME.dim,
+    content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    fg: THEME.dim2,
   });
 
   screen.add(header);
@@ -99,9 +100,9 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
   const header = new BoxRenderable(renderer, {
     id: `${opts.id}-header`,
     borderStyle: "single",
-    borderColor: THEME.redDim,
+    borderColor: THEME.border,
     title: ` ${opts.route} `,
-    titleColor: THEME.red,
+    titleColor: THEME.redSoft,
     paddingX: 1,
     flexDirection: "column",
     backgroundColor: THEME.panelBg,
@@ -115,7 +116,7 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     header.add(new TextRenderable(renderer, {
       id: `${opts.id}-subtitle`,
       content: opts.subtitle,
-      fg: THEME.yellow,
+      fg: THEME.dim2,
     }));
   }
 
@@ -129,8 +130,8 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
 
   const footer = new TextRenderable(renderer, {
     id: `${opts.id}-footer`,
-    content: opts.footer ?? "  Escape dashboard    Enter select",
-    fg: THEME.dim,
+    content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    fg: THEME.dim2,
   });
 
   screen.add(header);

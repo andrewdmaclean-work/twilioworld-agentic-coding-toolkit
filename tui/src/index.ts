@@ -20,7 +20,8 @@ import { buildLogScreen } from "./screens/log.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
 import { buildModelControlsScreen } from "./screens/model-controls.ts";
-import { buildToolsScreen } from "./screens/tools.ts";
+import { buildSettingsScreen } from "./screens/settings.ts";
+import { buildResourcesScreen } from "./screens/resources.ts";
 import {
   downloadLocalModel, installDevPhone, installTwilioCli,
   openDevPhone, openTwilioLogin, openTwilioTerminal, stopModelServer,
@@ -37,19 +38,19 @@ import {
 import { MODEL_SERVER_LOG, serverArgs } from "./lib/model.ts";
 import { openUrl, openLlamaWebUi, startMcpProxy, capture, have, startDaemon } from "./lib/exec.ts";
 import { pathNodeVersion, supportsPiNode } from "./lib/node-version.ts";
+import { THEME } from "./theme.ts";
+import { SELECT_STYLE, shortcutBar } from "./ui-style.ts";
 
 // ── Palette ──────────────────────────────────────────────────────────
-const RED      = "#F22F46";
-const RED_DIM  = "#5C0013";
-const WHITE    = "#FFFFFF";
-const SILVER   = "#CCCCCC";
-const DIM      = "#4A4A5A";
-const DIM2     = "#777777";
-const BG_SEL   = "#3D000E";
-const GREEN    = "#22C55E";
-const YELLOW   = "#F59E0B";
-const CYAN      = "#38BDF8";
-const BG_PANEL  = "#08080B";
+const RED      = THEME.red;
+const WHITE    = THEME.white;
+const SILVER   = THEME.silver;
+const DIM      = THEME.dim;
+const DIM2     = THEME.dim2;
+const GREEN    = THEME.green;
+const YELLOW   = THEME.yellow;
+const CYAN     = THEME.cyan;
+const BG_PANEL = THEME.panelBg;
 const POLL_MS  = 30000;
 
 const TERMINAL_RESTORE = [
@@ -143,9 +144,9 @@ function wrapText(text: string, width: number): string {
 
 function nextMove(s: ToolkitStatus | null): string {
   if (!s) return "Loading local status.";
-  if (!s.model.ready) return `Chat with Twilio Docs will download the local model (~${LOCAL_MODEL_SIZE_LABEL}) on first use.`;
+  if (!s.model.ready) return `Ask Twilio will download the local model (~${LOCAL_MODEL_SIZE_LABEL}) on first use.`;
   if (!s.twilio.installed) return "Twilio CLI opens/installs from the Twilio CLI menu when you need it.";
-  return "Chat with Twilio Docs, Configure an agent, or open Dev Phone.";
+  return "Ask Twilio, configure an agent, or open Dev Phone.";
 }
 
 function headlineText(s: ToolkitStatus | null): string {
@@ -155,39 +156,48 @@ function headlineText(s: ToolkitStatus | null): string {
 }
 
 function modelReasoningLabel(mode: ModelReasoningMode): string {
-  if (mode === "on") return "On";
-  if (mode === "auto") return "Auto";
-  return "Off";
+  if (mode === "on") return "Thoughtful";
+  if (mode === "auto") return "Balanced";
+  return "Fast";
 }
 
 function nextModelReasoningMode(mode: ModelReasoningMode): ModelReasoningMode {
   return mode === "off" ? "on" : "off";
 }
 
-// ── Status panel lines — installed + running, only what's present ────
+// ── Status rail ──────────────────────────────────────────────────────
 function statusLines(s: ToolkitStatus | null) {
-  if (!s) return [{ text: "  ·  Checking local status...", fg: DIM }];
+  const row = (icon: string, label: string, value: string, fg: string) => ({
+    text: `  ${icon}  ${label.padEnd(11)} ${value}`,
+    fg,
+  });
+  if (!s) return [
+    row("◌", "Model", "Checking", DIM2),
+    row("◌", "Twilio", "Checking", DIM2),
+    row("◌", "Agents", "Checking", DIM2),
+    row("◌", "Docs MCP", "Checking", DIM2),
+    row("◌", "Dev Phone", "Checking", DIM2),
+  ];
 
-  const ok   = (l: string, v: string) => ({ text: `  ✓  ${l.padEnd(13)} ${v}`, fg: GREEN });
-  const idle = (l: string, v: string) => ({ text: `  ·  ${l.padEnd(13)} ${v}`, fg: DIM2 });
-  const lines: Array<{ text: string; fg: string }> = [];
-
-  // Running now (green).
-  if (s.model.running) lines.push(ok("Local model", `running on :${MODEL_SERVER_PORT}`));
-  if (process.env.TWILIO_MCP_CREDS) lines.push(ok("Execute MCP", "creds loaded"));
-
-  // Installed but idle (dim) — only shown when present, no dashes for absent.
-  if (s.model.ready && !s.model.running) lines.push(idle("Local model", "downloaded, not running"));
-  if (s.twilio.sid) lines.push(idle("Twilio", `${s.twilio.profile}`));
-  else if (s.twilio.installed) lines.push(idle("Twilio CLI", "installed, not logged in"));
-  if (s.devPhone.installed) lines.push(idle("Dev Phone", "installed"));
-  if ((s.skills.installedCount ?? 0) > 0) lines.push(idle("Skills", `${s.skills.installedCount} for agents`));
-
-  return lines.length ? lines : [{ text: "  ·  Nothing installed yet. Pick an action to begin.", fg: DIM2 }];
+  const agentCount = Number(s.pi.installed) + Number(s.opencode.installed);
+  return [
+    s.model.running
+      ? row("●", "Model", `Online :${MODEL_SERVER_PORT}`, GREEN)
+      : s.model.ready ? row("●", "Model", "Ready", CYAN) : row("○", "Model", "Not installed", DIM2),
+    s.twilio.sid
+      ? row("●", "Twilio", s.twilio.profile || "Connected", GREEN)
+      : s.twilio.installed ? row("○", "Twilio", "Sign-in needed", YELLOW) : row("○", "Twilio", "CLI not installed", DIM2),
+    agentCount > 0
+      ? row("●", "Agents", `${agentCount} detected`, CYAN) : row("○", "Agents", "None detected", DIM2),
+    (s.skills.installedCount ?? 0) > 0
+      ? row("●", "Docs MCP", `${s.skills.installedCount} skills ready`, GREEN) : row("○", "Docs MCP", "Setup needed", DIM2),
+    s.devPhone.installed
+      ? row("●", "Dev Phone", "Installed", CYAN) : row("○", "Dev Phone", "Optional", DIM2),
+  ];
 }
 
 // ── Menu definition ──────────────────────────────────────────────────
-type ItemId = "chat"|"agent"|"devphone"|"cli"|"tools"|"exit";
+type ItemId = "chat"|"agent"|"devphone"|"cli"|"resources"|"settings"|"exit";
 
 interface MenuItem {
   id: ItemId;
@@ -202,7 +212,7 @@ function doneLabel(done: boolean, label: string): string {
 
 const ALL_ITEMS: MenuItem[] = [
   { id: "chat",
-    label: (s) => doneLabel(Boolean(s?.model.ready), "Chat with Twilio Docs"),
+    label: (s) => doneLabel(Boolean(s?.model.ready), "Ask Twilio"),
     detail: (s) => s?.model.ready ? "local AI chat — model downloaded" : "local AI chat — downloads model on first use",
     visible: () => true },
 
@@ -221,9 +231,14 @@ const ALL_ITEMS: MenuItem[] = [
     detail: (s) => s?.twilio.sid ? `logged in as ${s.twilio.profile}` : s?.twilio.installed ? "installed, not logged in" : "open a terminal, log in, check account, or uninstall",
     visible: () => true },
 
-  { id: "tools",
-    label: () => "Tools & settings",
-    detail: () => "install choices, TwilioWorld, and Twilio AI Docs",
+  { id: "resources",
+    label: () => "Resources",
+    detail: () => "TwilioWorld and Twilio AI Docs",
+    visible: () => true },
+
+  { id: "settings",
+    label: () => "Settings",
+    detail: () => "choose components or manage the local AI model",
     visible: () => true },
 
   { id: "exit",
@@ -237,7 +252,7 @@ function visibleItems(s: ToolkitStatus | null): MenuItem[] {
 }
 
 function yesNo(v: boolean): string {
-  return v ? "yes" : "no";
+  return v ? "Ready" : "Needs setup";
 }
 
 function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string {
@@ -245,76 +260,84 @@ function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string 
   switch (item.id) {
     case "chat":
       return [
-        "Purpose",
-        "  Chat with Twilio Docs using the local Gemma model — in this TUI or",
-        "  in the llama.cpp web UI in your browser. Both use Twilio Docs MCP.",
+        "OVERVIEW",
+        "  Ask Twilio questions using local AI grounded in Twilio Skills and",
+        "  current documentation.",
         "",
-        "Local model (required for chat)",
-        `  Runtime ready: ${yesNo(Boolean(s?.model.runtimeReady))}`,
-        `  Weights ready: ${yesNo(Boolean(s?.model.fileReady))}`,
-        `  Running now: ${yesNo(Boolean(s?.model.running))}`,
+        "READINESS",
+        `  Runtime       ${yesNo(Boolean(s?.model.runtimeReady))}`,
+        `  Weights       ${yesNo(Boolean(s?.model.fileReady))}`,
+        `  Service       ${s?.model.running ? "Online" : "Stopped"}`,
         "",
         s?.model.ready
-          ? "Ready. Enter to choose TUI or browser."
-          : `Not downloaded yet — Enter offers to download it (~${LOCAL_MODEL_SIZE_LABEL}).`,
+          ? "RESULT\n  Private, local answers grounded in Twilio guidance."
+          : `DOWNLOAD\n  Local model and runtime, approximately ${LOCAL_MODEL_SIZE_LABEL}.`,
       ].join("\n");
     case "agent":
       return [
-        "Purpose",
+        "OVERVIEW",
         "  Wire Twilio Skills + Docs MCP into whichever coding agent you pick,",
         "  then launch it. Pi is installed + launched for you; others get wired.",
         "",
-        "Always wired",
+        "INCLUDED",
         "  Twilio Skills + Docs MCP (no auth, no config needed)",
         "",
-        "Execute MCP (restricted read-only Twilio API access)",
-        `  Wired only if creds are exported: ${yesNo(Boolean(process.env.TWILIO_MCP_CREDS))}`,
+        "EXECUTE MCP",
+        `  Read-only credentials  ${yesNo(Boolean(process.env.TWILIO_MCP_CREDS))}`,
       ].join("\n");
     case "devphone":
       return [
-        "Purpose",
+        "OVERVIEW",
         "  Browser soft phone — send/receive real SMS and voice with no device.",
         "",
-        "Status",
-        `  Toolkit-local Twilio CLI installed: ${yesNo(Boolean(s?.twilio.installed))}`,
-        `  Dev Phone installed: ${yesNo(Boolean(s?.devPhone.installed))}`,
-        `  Logged in: ${yesNo(Boolean(s?.twilio.sid))}`,
+        "READINESS",
+        `  Twilio CLI    ${yesNo(Boolean(s?.twilio.installed))}`,
+        `  Dev Phone     ${yesNo(Boolean(s?.devPhone.installed))}`,
+        `  Account       ${s?.twilio.sid ? "Connected" : "Needs sign-in"}`,
         "",
-        "Enter installs it if needed, then opens it. Use a spare number —",
-        "Dev Phone can overwrite a number's webhooks.",
+        "NOTICE",
+        "  Use a spare number; Dev Phone can replace its webhook settings.",
       ].join("\n");
     case "cli":
       return [
-        "Purpose",
+        "OVERVIEW",
         "  Twilio CLI hub — open a terminal, log in, check your account, or",
         "  uninstall the CLI.",
         "",
-        "Status",
-        `  Installed: ${yesNo(Boolean(s?.twilio.installed))}`,
-        s?.twilio.sid ? `  Account: ${s.twilio.profile} (${s.twilio.sid})` : "  Not logged in",
+        "STATUS",
+        `  CLI           ${yesNo(Boolean(s?.twilio.installed))}`,
+        s?.twilio.sid ? `  Account       ${s.twilio.profile} (${s.twilio.sid})` : "  Account       Not connected",
       ].join("\n");
-    case "tools":
+    case "resources":
       return [
-        "Manage",
-        "  Change install choices or run Setup again.",
-        "",
-        "Resources",
-        "  TwilioWorld and Twilio AI Docs.",
+        "RESOURCES",
+        "  Open TwilioWorld or browse the Twilio AI documentation.",
+      ].join("\n");
+    case "settings":
+      return [
+        "SETTINGS",
+        "  Components     Choose and install Ask Twilio or Dev Phone.",
+        "  Local AI       Browser chat, response style, process, and storage.",
       ].join("\n");
   }
 }
 
 // ── Dashboard factory ────────────────────────────────────────────────
-function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
-  const STATUS_ROWS = 7; // number of status lines
+export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
+  const STATUS_ROWS = 5;
+  type CompactPane = "actions" | "status" | "details";
+  let compactPane: CompactPane = "actions";
+  let narrowLayout = false;
+  let statusContentWidth = 40;
+  let detailContentWidth = 40;
 
   // ── Widgets ─────────────────────────────────────────────────────
   const header = new BoxRenderable(renderer, {
     id: "header",
-    borderStyle: "double",
-    borderColor: RED,
-    title: " TwilioWorld Agentic Coding Toolkit ",
-    titleColor: WHITE,
+    borderStyle: "single",
+    borderColor: THEME.borderStrong,
+    title: " TwilioWorld ",
+    titleColor: RED,
     paddingX: 1,
     flexDirection: "row",
     backgroundColor: BG_PANEL,
@@ -365,8 +388,8 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   // Left column: menu
   const MENU_W = 36;
   const menuCol = new BoxRenderable(renderer, {
-    id: "menu-col", borderStyle: "single", borderColor: RED_DIM,
-    title: " Actions ", titleColor: RED,
+    id: "menu-col", borderStyle: "single", borderColor: THEME.border,
+    title: " Actions ", titleColor: THEME.redSoft,
     width: MENU_W, flexShrink: 0,
     backgroundColor: BG_PANEL,
   });
@@ -374,10 +397,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     id: "menu-list",
     width: MENU_W - 2, height: 10, // overridden by resize()
     options: [],
-    backgroundColor: "transparent", focusedBackgroundColor: "transparent",
-    textColor: SILVER, focusedTextColor: SILVER,
-    selectedBackgroundColor: BG_SEL, selectedTextColor: WHITE,
-    descriptionColor: DIM2, selectedDescriptionColor: SILVER,
+    ...SELECT_STYLE,
     showScrollIndicator: false, showDescription: false,
   });
   menuCol.add(menuList);
@@ -388,24 +408,24 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   });
 
   const statusCol = new BoxRenderable(renderer, {
-    id: "status-col", borderStyle: "single", borderColor: RED_DIM,
-    title: " Status ", titleColor: RED,
-    flexShrink: 0, flexDirection: "column",
+    id: "status-col", borderStyle: "single", borderColor: THEME.border,
+    title: " System status ", titleColor: THEME.redSoft,
+    flexShrink: 0, flexDirection: "column", alignItems: "stretch", overflow: "hidden",
     backgroundColor: BG_PANEL,
   });
   const statusTexts = Array.from({ length: STATUS_ROWS }, (_, i) =>
-    new TextRenderable(renderer, { id: `sl-${i}`, content: "", fg: DIM })
+    new TextRenderable(renderer, { id: `sl-${i}`, content: "", fg: DIM, width: "100%" })
   );
   statusTexts.forEach((t) => statusCol.add(t));
 
   const detailCol = new BoxRenderable(renderer, {
-    id: "detail-col", borderStyle: "single", borderColor: RED_DIM,
-    title: " Selected Action ", titleColor: RED,
-    flexGrow: 1, paddingX: 1,
+    id: "detail-col", borderStyle: "single", borderColor: THEME.border,
+    title: " Action details ", titleColor: THEME.redSoft,
+    flexGrow: 1, paddingX: 1, alignItems: "stretch", overflow: "hidden",
     backgroundColor: BG_PANEL,
   });
   const detailText = new TextRenderable(renderer, {
-    id: "detail-text", content: "", fg: SILVER,
+    id: "detail-text", content: "", fg: SILVER, width: "100%",
   });
   detailCol.add(detailText);
   let routeScreen: BoxRenderable | null = null;
@@ -419,9 +439,16 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   body.add(menuCol);
   body.add(rightCol);
 
+  const paneTabs = new TextRenderable(renderer, {
+    id: "dashboard-pane-tabs",
+    content: "",
+    fg: THEME.dim2,
+    visible: false,
+  });
+
   const bottomBar = new TextRenderable(renderer, {
-    id: "bottom", content: "  ↑/↓ or j/k navigate    Enter select    q quit",
-    fg: DIM,
+    id: "bottom", content: shortcutBar(["↑↓", "navigate"], ["Enter", "select"], ["Q", "quit"]),
+    fg: DIM2,
   });
 
   const dashboard = new BoxRenderable(renderer, {
@@ -434,6 +461,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     gap: 1,
   });
   dashboard.add(header);
+  dashboard.add(paneTabs);
   dashboard.add(body);
   dashboard.add(bottomBar);
 
@@ -442,6 +470,21 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   // ── Resize: fill the full terminal ──────────────────────────────
   // SelectRenderable needs explicit height; set everything explicitly
   // so nothing is left to guess.
+  function updatePaneVisibility(): void {
+    paneTabs.visible = narrowLayout;
+    menuCol.visible = !narrowLayout || compactPane === "actions";
+    rightCol.visible = !narrowLayout || compactPane !== "actions";
+    statusCol.visible = !narrowLayout || compactPane === "status";
+    detailCol.visible = !narrowLayout || compactPane === "details";
+    if (narrowLayout) {
+      const tab = (id: CompactPane, label: string) => compactPane === id ? `[${label}]` : ` ${label} `;
+      paneTabs.content = `  ${tab("actions", "Actions")}  ${tab("status", "Status")}  ${tab("details", "Details")}    [Tab] switch`;
+      bottomBar.content = shortcutBar(["Tab", "view"], ["↑↓", "navigate"], ["Enter", "select"], ["Q", "quit"]);
+    } else {
+      bottomBar.content = shortcutBar(["↑↓", "navigate"], ["Enter", "select"], ["Q", "quit"]);
+    }
+  }
+
   function resize() {
     const H = renderer.height;
     const W = renderer.width;
@@ -449,45 +492,55 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     // "TwilioWorld" in the "tiny" font is 44 cols; header has 2 border cols
     // + 2 padding cols (paddingX: 1 each side) = 4 cols of overhead, plus a
     // little breathing room so it doesn't sit flush against the border.
-    const BANNER_MIN_WIDTH = 44 + 4 + 8;
-    const wide = W >= BANNER_MIN_WIDTH;
-    const showRobot = W >= 74;
+    const wide = W >= 92;
+    narrowLayout = W < 64;
+    const robotMode = wide ? "full" : W >= 72 ? "compact" : "hidden";
+    const robotWidth = robotMode === "full" ? 16 : robotMode === "compact" ? 9 : 0;
     banner.visible = wide;
-    robot.setVisible(showRobot);
-    header.title = wide ? "" : " TwilioWorld Agentic Coding Toolkit ";
+    robot.setMode(robotMode);
+    header.title = wide ? "" : " TwilioWorld ";
 
-    const headerH = wide ? 7 : 5; // 2 banner rows + 3 text rows + 2 border, vs. 3 text rows + 2 border
-    const bodyH = Math.max(8, H - headerH - 2);
-    const rightW = Math.max(20, W - MENU_W - 1); // 1 = gap between columns
+    const headerH = wide ? 7 : robotMode === "compact" ? 6 : 5;
+    const bodyH = Math.max(8, H - headerH - (narrowLayout ? 5 : 3));
+    const menuW = narrowLayout ? W : wide ? MENU_W : 30;
+    const rightW = narrowLayout ? W : Math.max(24, W - menuW - 1);
+    statusContentWidth = Math.max(10, rightW - 2);
+    detailContentWidth = Math.max(20, rightW - 4);
 
     // Explicit sizes — Yoga flexGrow handles width of rightCol,
     // but height needs to be explicit for SelectRenderable.
     body.height = bodyH;
     body.width = W;
+    body.flexDirection = "row";
     header.height = headerH;
     header.width = W;
 
     menuCol.height = bodyH;
+    menuCol.width = menuW;
     menuList.height = Math.max(2, bodyH - 2); // subtract borders
-    menuList.width  = MENU_W - 2;
+    menuList.width  = Math.max(10, menuW - 2);
+    rightCol.height = bodyH;
+    rightCol.width = rightW;
 
     // Status box: STATUS_ROWS lines + 2 border
-    const statusBoxH = STATUS_ROWS + 2;
+    const statusBoxH = narrowLayout ? bodyH : STATUS_ROWS + 2;
     statusCol.height = statusBoxH;
     statusCol.width  = rightW;
 
     // Detail fills remaining right col height (gained a panel's worth of
     // space by folding Installed into Status).
-    const detailH = Math.max(4, bodyH - statusBoxH - 1); // 1 gap
+    const detailH = narrowLayout ? bodyH : Math.max(4, bodyH - statusBoxH - 1);
     detailCol.height = detailH;
     detailCol.width  = rightW;
 
-    const brandWidth = Math.max(10, W - 4 - (showRobot ? 12 : 0));
+    const brandWidth = Math.max(10, W - 4 - robotWidth);
     brand.width = brandWidth;
     titleText.width = brandWidth;
     headline.width = brandWidth;
     nextText.width = brandWidth;
     bottomBar.width = W;
+    paneTabs.width = W;
+    updatePaneVisibility();
   }
 
   resize();
@@ -498,7 +551,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 
   function refreshHeaderAndAddon(s: ToolkitStatus | null) {
     headline.content = clip(headlineText(s), Math.max(10, renderer.width - 4));
-    nextText.content = clip(`Next: ${nextMove(s)}`, Math.max(10, renderer.width - 4));
+    nextText.content = clip(`› ${nextMove(s)}`, Math.max(10, renderer.width - 4));
   }
 
   function setDetail(item: MenuItem | undefined, s: ToolkitStatus | null) {
@@ -508,7 +561,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
       detailText.content = "";
     } else {
       detailCol.title = ` ${item.label(s)} `;
-      detailText.content = wrapText(detailFor(item, s), Math.max(20, (detailCol.width ?? 80) - 4));
+      detailText.content = wrapText(detailFor(item, s), detailContentWidth);
     }
   }
 
@@ -520,7 +573,7 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     const lines = statusLines(s).slice(0, STATUS_ROWS);
     statusTexts.forEach((text, i) => {
       const line = lines[i];
-      text.content = line ? clip(line.text, Math.max(10, (statusCol.width ?? renderer.width) - 2)) : "";
+      text.content = line ? clip(line.text, statusContentWidth) : "";
       text.fg = line?.fg ?? DIM;
     });
 
@@ -579,23 +632,53 @@ function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
       detailCol.remove("detail-text");
     }
     routeScreen = screen;
+    if (narrowLayout) compactPane = "details";
     detailCol.title = ` ${title} `;
     detailCol.add(screen);
+    updatePaneVisibility();
     if (screen.focusable) screen.focus();
   }
 
   function backRoute() {
+    robot.react("curious");
     if (routeScreen) {
       detailCol.remove(routeScreen.id);
       routeScreen = null;
       detailCol.add(detailText);
     }
     setDetail(lastItems[menuList.getSelectedIndex()], lastStatus);
+    if (narrowLayout) compactPane = "actions";
+    updatePaneVisibility();
     menuList.focus();
   }
 
+  const paneOrder: CompactPane[] = ["actions", "status", "details"];
+  const paneKeyHandler = (...args: unknown[]) => {
+    if (!narrowLayout || routeScreen) return;
+    const key = args.find((arg) => arg && typeof arg === "object" && typeof (arg as { name?: unknown }).name === "string") as { name?: string } | undefined;
+    if (key?.name !== "tab") return;
+    compactPane = paneOrder[(paneOrder.indexOf(compactPane) + 1) % paneOrder.length];
+    updatePaneVisibility();
+    if (compactPane === "actions") menuList.focus();
+  };
+  renderer.keyInput.on("keypress", paneKeyHandler);
+
   menuList.focus();
-  return { dashboard, menuList, bottomBar, update, showRoute, backRoute, dispose: robot.dispose };
+  return {
+    dashboard,
+    menuList,
+    bottomBar,
+    update,
+    showRoute,
+    backRoute,
+    react: robot.react,
+    restoreFooter: updatePaneVisibility,
+    dispose: () => {
+      renderer.off("resize", resize);
+      renderer.keyInput.removeListener("keypress", paneKeyHandler);
+      robot.dispose();
+    },
+  };
 }
 
 // ── Main ─────────────────────────────────────────────────────────────
@@ -624,7 +707,7 @@ async function main() {
     useMouse: false,
     enableMouseMovement: false,
     openConsoleOnError: false,
-    backgroundColor: "#050507",
+    backgroundColor: THEME.appBg,
   });
   try { renderer.useMouse = false; } catch { /* ignore */ }
 
@@ -643,7 +726,7 @@ async function main() {
     setTimeout(() => process.exit(code), 0);
   }
 
-  const { dashboard, menuList, bottomBar, update, showRoute, backRoute, dispose } = buildDashboard(renderer, () => shutdown(0));
+  const { dashboard, menuList, bottomBar, update, showRoute, backRoute, react, restoreFooter, dispose } = buildDashboard(renderer, () => shutdown(0));
   disposeDashboard = dispose;
 
   let busy = false;
@@ -683,10 +766,11 @@ async function main() {
     const id = ++flashId;
     bottomBar.content = `  ${msg}`;
     bottomBar.fg = color;
+    react(color === GREEN ? "excited" : color === THEME.danger ? "alert" : "curious");
     setTimeout(() => {
       if (id !== flashId) return;
-      bottomBar.content = "  ↑/↓ or j/k navigate    Enter select    q quit";
-      bottomBar.fg = DIM;
+      restoreFooter();
+      bottomBar.fg = DIM2;
     }, 4000);
   }
 
@@ -696,9 +780,11 @@ async function main() {
     run: (onLog: (l: string, s: "stdout" | "stderr") => void, onDone: (ok: boolean) => void) => void | Promise<void>,
   ): void {
     busy = true;
+    react("thinking");
     showRoute(buildLogScreen(renderer, title, (onLog, onDone) => {
       return run(onLog, (ok) => {
         onDone(ok);
+        react(ok ? "excited" : "alert");
         void poll(true);
       });
     }, () => back()), title);
@@ -724,12 +810,12 @@ async function main() {
       status: latestStatus,
       reasoningMode,
       onOpenBrowser: startBrowserChat,
-      onMissingModel: () => flash("Local model not downloaded — use Setup choices", YELLOW),
+      onMissingModel: () => flash("Local model not downloaded — install Local Chat from Components", YELLOW),
       onToggleReasoning: () => {
         const next = nextModelReasoningMode(reasoningMode);
         setModelReasoningMode(next);
         stopModelServer();
-        flash(`Model thinking ${modelReasoningLabel(next).toLowerCase()} — applies on next start`, GREEN);
+        flash(`Response style: ${modelReasoningLabel(next)} — applies on next start`, GREEN);
         refreshStatus();
       },
       onStop: () => {
@@ -739,7 +825,7 @@ async function main() {
       },
       onRemove: () => runAction("Remove local model", (onLog, onDone) => runUninstall({ keys: ["modelRuntime"] as UninstallKey[], onLog, onDone })),
       onCancel: back,
-    }), "Local model");
+    }), "Local AI model");
   }
 
   menuList.on(SelectRenderableEvents.ITEM_SELECTED, async (_i, opt) => {
@@ -749,11 +835,9 @@ async function main() {
 
       case "agent": busy = true; showRoute(buildAgentScreen(renderer, back, back), "Configure Agent"); break;
 
-      case "tools": {
+      case "resources": {
         busy = true;
-        showRoute(buildToolsScreen(renderer, {
-          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Setup"),
-          onModelControls: showModelControls,
+        showRoute(buildResourcesScreen(renderer, {
           onTwilioWorld: () => {
             const res = openUrl("https://twilio.world");
             flash(res.ok ? "Opening twilio.world in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
@@ -763,7 +847,17 @@ async function main() {
             flash(res.ok ? "Opening twilio.com/docs/ai in your browser" : `⚠  ${res.error}`, res.ok ? GREEN : YELLOW);
           },
           onCancel: back,
-        }), "Tools & settings");
+        }), "Resources");
+        break;
+      }
+
+      case "settings": {
+        busy = true;
+        showRoute(buildSettingsScreen(renderer, {
+          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Setup"),
+          onModelControls: showModelControls,
+          onCancel: back,
+        }), "Settings");
         break;
       }
 
@@ -775,29 +869,29 @@ async function main() {
         }
         showRoute(buildSubmenuScreen(renderer, {
           id: "chat-download-screen",
-          route: "Dashboard / Chat with Twilio Docs",
-          title: "Local model required",
-          subtitle: `Chat downloads the local model once (~${LOCAL_MODEL_SIZE_LABEL}).`,
-          bodyTitle: "Chat setup",
+          route: "Dashboard / Ask Twilio",
+          title: "Ask Twilio needs local AI",
+          subtitle: `The model downloads once and uses approximately ${LOCAL_MODEL_SIZE_LABEL}.`,
+          bodyTitle: "Set up Ask Twilio",
           options: [
             {
               name: "Download local model",
-              description: "install Gemma and its local runtime, then return to Chat",
+              description: "install the private local model, then return to Ask Twilio",
               onSelect: () => {
                 runAction("Download local model", (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
                 return false;
               },
             },
             {
-              name: "Review Setup choices",
-              description: "change optional component selections before installing",
+              name: "Review Components",
+              description: "choose which toolkit components to install",
               onSelect: () => {
                 showRoute(buildSetupScreen(renderer, back, back), "Setup");
                 return false;
               },
             },
           ],
-        }, back), "Chat setup");
+        }, back), "Ask Twilio setup");
         break;
       }
 
@@ -979,7 +1073,7 @@ async function main() {
     }
   });
 
-  // First run uses the same Setup flow available from Tools & settings.
+  // First run uses the same Setup flow available from Settings.
   // Placed here — after poll/back/flash/busy are all initialized — so
   // enterDashboard()'s poll() call never hits a temporal-dead-zone binding.
   function enterDashboard(): void {
@@ -1005,8 +1099,10 @@ async function main() {
   });
 }
 
-main().catch((e) => {
-  console.error(e);
-  forceTerminalRestore();
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((e) => {
+    console.error(e);
+    forceTerminalRestore();
+    process.exit(1);
+  });
+}

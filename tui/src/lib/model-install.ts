@@ -1,5 +1,5 @@
 // lib/model-install.ts — shared local model installer.
-// Setup and the Chat shortcut both use this so download/extract behavior,
+// Components and Ask Twilio both use this so download/extract behavior,
 // progress logs, and failure handling cannot drift.
 
 import {
@@ -243,6 +243,6 @@ export async function installLocalModel(opts: {
     ok("Model weights already present", onLog);
   }
 
-  ok("Local model ready — Chat with Twilio Docs is available.", onLog);
+  ok("Local model ready — Ask Twilio is available.", onLog);
   return true;
 }

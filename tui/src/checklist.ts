@@ -20,6 +20,7 @@ import {
 } from "@opentui/core";
 import type { KeyEvent } from "@opentui/core";
 import { THEME } from "./theme.ts";
+import { SELECT_STYLE, shortcutBar } from "./ui-style.ts";
 
 export interface CheckItem {
   key: string;
@@ -66,14 +67,7 @@ export class CheckList {
       flexGrow: opts.height ? 0 : 1,
       flexShrink: 0,
       options: this._buildOptions(),
-      backgroundColor: "transparent",
-      focusedBackgroundColor: "transparent",
-      textColor: THEME.silver,
-      focusedTextColor: THEME.silver,
-      selectedBackgroundColor: THEME.bgSelected,
-      selectedTextColor: THEME.white,
-      descriptionColor: THEME.dim2,
-      selectedDescriptionColor: THEME.silver,
+      ...SELECT_STYLE,
     });
 
     // Space toggles the current item.
@@ -106,8 +100,8 @@ export class CheckList {
 
     this._hint = new TextRenderable(renderer, {
       id: `${id}-hint`,
-      content: "▸ Press SPACE to check/uncheck an item · ENTER to save · ESC to cancel",
-      fg: THEME.yellow,
+      content: shortcutBar(["Space", "toggle"], ["Enter", "save"], ["Esc", "cancel"]),
+      fg: THEME.dim2,
     });
 
     this.container = new BoxRenderable(renderer, {

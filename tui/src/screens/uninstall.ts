@@ -10,6 +10,7 @@ import {
 import { CheckList, type CheckItem } from "../checklist.ts";
 import { runUninstall, type UninstallKey } from "../lib/uninstall.ts";
 import { THEME } from "../theme.ts";
+import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
@@ -42,7 +43,7 @@ export function buildUninstallScreen(
     title: "Choose what to uninstall",
     subtitle: "Space toggles items. Enter reviews the selection. Escape returns to dashboard.",
     bodyTitle: "Uninstall Items",
-    footer: "  Escape dashboard    Space toggle item    Enter review",
+    footer: shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "review"]),
   });
 
   const warning = new TextRenderable(renderer, {
@@ -71,14 +72,7 @@ export function buildUninstallScreen(
       { name: "Yes - uninstall selected items", description: "Runs only the checked removals and streams output here" },
       { name: "No - go back", description: "Return to the checklist without removing anything" },
     ],
-    backgroundColor: "transparent",
-    focusedBackgroundColor: "transparent",
-    textColor: THEME.silver,
-    focusedTextColor: THEME.silver,
-    selectedBackgroundColor: THEME.bgSelected,
-    selectedTextColor: THEME.white,
-    descriptionColor: THEME.dim2,
-    selectedDescriptionColor: THEME.silver,
+    ...SELECT_STYLE,
   });
 
   let selected: UninstallKey[] = [];
