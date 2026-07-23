@@ -19,21 +19,15 @@ import { join } from "path";
 import { twilioFactAt } from "./twilio-facts.ts";
 import { capture, fileExecutable, runStreaming, type LogFn } from "./exec.ts";
 import {
-  GGUF_DEST,
-  GGUF_MIN_BYTES,
-  GGUF_MMPROJ,
-  GGUF_STAGING,
-  GGUF_URL,
   LLAMAFILE_DEST,
   LLAMAFILE_SIZE_BYTES,
   LLAMAFILE_SIZE_LABEL,
   LLAMAFILE_URL,
-  LOCAL_MODEL_SIZE_BYTES,
-  LOCAL_MODEL_SIZE_LABEL,
   MODELS_DIR,
   ROOT,
   TOOLS_DIR,
 } from "./constants.ts";
+import type { LocalModel } from "./local-models.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
 function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
@@ -111,17 +105,17 @@ function looksLikeExecutable(path: string): boolean {
   }
 }
 
-function ggufSizeOk(): boolean {
-  if (!existsSync(GGUF_DEST)) return false;
-  try { return statSync(GGUF_DEST).size >= GGUF_MIN_BYTES; } catch { return false; }
+function ggufSizeOk(model: LocalModel): boolean {
+  if (!existsSync(model.dest)) return false;
+  try { return statSync(model.dest).size >= model.minBytes; } catch { return false; }
 }
 
 function runtimeOk(): boolean {
   return fileExecutable(LLAMAFILE_DEST);
 }
 
-function ggufStagingExists(): boolean {
-  return existsSync(GGUF_STAGING);
+function ggufStagingExists(model: LocalModel): boolean {
+  return existsSync(model.staging);
 }
 
 function freeKb(): number {
@@ -145,22 +139,19 @@ function findGgufs(dir: string): string[] {
   return found;
 }
 
-export function localModelInstalled(): boolean {
-  return runtimeOk() && ggufSizeOk();
-}
-
 export async function installLocalModel(opts: {
+  model: LocalModel;
   onLog: LogFn;
   heading?: string;
   keepArchiveNotice?: boolean;
 }): Promise<boolean> {
-  const { onLog, heading, keepArchiveNotice = false } = opts;
+  const { model, onLog, heading, keepArchiveNotice = false } = opts;
   if (heading) step(heading, onLog);
 
-  if (localModelInstalled()) {
+  if (runtimeOk() && ggufSizeOk(model)) {
     ok("llamafile runtime already present", onLog);
     ok("Model weights already present", onLog);
-    if (existsSync(GGUF_MMPROJ)) ok("mmproj (multimodal) already present", onLog);
+    if (model.mmproj && existsSync(model.mmproj)) ok("mmproj (multimodal) already present", onLog);
     return true;
   }
 
@@ -191,32 +182,32 @@ export async function installLocalModel(opts: {
     ok("llamafile runtime already present", onLog);
   }
 
-  if (!ggufSizeOk()) {
-    if (existsSync(GGUF_DEST)) {
-      const size = statSync(GGUF_DEST).size;
+  if (!ggufSizeOk(model)) {
+    if (existsSync(model.dest)) {
+      const size = statSync(model.dest).size;
       warn(`Found incomplete model file (${Math.round(size / 1024 / 1024)}MB < 1.5GB) — will re-download.`, onLog);
-      rmSync(GGUF_DEST);
+      rmSync(model.dest);
     }
 
     mkdirSync(MODELS_DIR, { recursive: true });
-    if (!ggufStagingExists()) {
-      say(`   Downloading Gemma 4 E2B from Kaggle (~${LOCAL_MODEL_SIZE_LABEL})…`, onLog);
-      const weightsProgress = startProgressLogger(GGUF_STAGING, LOCAL_MODEL_SIZE_BYTES, 3000, onLog, { facts: true });
-      const res = await runStreaming("curl", curlDownloadArgs(GGUF_URL, GGUF_STAGING), { cwd: ROOT, onLog });
+    if (!ggufStagingExists(model)) {
+      say(`   Downloading Gemma 4 E2B from Kaggle (~${model.sizeLabel})…`, onLog);
+      const weightsProgress = startProgressLogger(model.staging, model.sizeBytes, 3000, onLog, { facts: true });
+      const res = await runStreaming("curl", curlDownloadArgs(model.url, model.staging), { cwd: ROOT, onLog });
       clearInterval(weightsProgress);
       if (!res.ok) {
-        err(`Download failed — partial file kept at ${GGUF_STAGING} so re-running can resume it.`, onLog);
+        err(`Download failed — partial file kept at ${model.staging} so re-running can resume it.`, onLog);
         return false;
       }
     } else {
-      const sz = statSync(GGUF_STAGING).size;
+      const sz = statSync(model.staging).size;
       ok(`Archive already present (${(sz / 1_073_741_824).toFixed(1)}GB) — skipping download`, onLog);
     }
 
     say("   Extracting… this can take a few minutes on a Pi-class machine.", onLog);
     const extractTmp = mkdtempSync(join(MODELS_DIR, "extract-"));
     const extractProgress = startExtractionLogger(onLog);
-    const tarRes = await runStreaming("tar", ["-xf", GGUF_STAGING, "-C", extractTmp], { cwd: ROOT, onLog });
+    const tarRes = await runStreaming("tar", ["-xf", model.staging, "-C", extractTmp], { cwd: ROOT, onLog });
     clearInterval(extractProgress);
     if (!tarRes.ok) {
       err("Extraction failed", onLog);
@@ -229,16 +220,16 @@ export async function installLocalModel(opts: {
     const mainGguf = mains.sort((a, b) => statSync(b).size - statSync(a).size)[0];
     if (!mainGguf) {
       err("No main model GGUF found in archive. Left everything in place:", onLog);
-      err(`  Archive:   ${GGUF_STAGING}`, onLog);
+      err(`  Archive:   ${model.staging}`, onLog);
       err(`  Extracted: ${extractTmp}`, onLog);
       return false;
     }
 
-    renameSync(mainGguf, GGUF_DEST);
-    if (mmproj) renameSync(mmproj, GGUF_MMPROJ);
+    renameSync(mainGguf, model.dest);
+    if (mmproj && model.mmproj) renameSync(mmproj, model.mmproj);
     rmSync(extractTmp, { recursive: true, force: true });
-    ok(`Model ready (${(statSync(GGUF_DEST).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
-    if (keepArchiveNotice) ok(`Archive kept at ${GGUF_STAGING} — delete it to reclaim ~${LOCAL_MODEL_SIZE_LABEL}`, onLog);
+    ok(`Model ready (${(statSync(model.dest).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
+    if (keepArchiveNotice) ok(`Archive kept at ${model.staging} — delete it to reclaim ~${model.sizeLabel}`, onLog);
   } else {
     ok("Model weights already present", onLog);
   }

@@ -6,6 +6,7 @@
 import { join } from "path";
 import { capture, have, killModelServer, openInNewWindow, runStreaming, twilioCliEnv, type LogFn, type NewWindowResult } from "./exec.ts";
 import { installLocalModel } from "./model-install.ts";
+import { getSelectedModel } from "./local-models.ts";
 import { NPM_GLOBAL_PREFIX, ROOT, TWILIO_CLI_HOME } from "./constants.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
@@ -17,7 +18,7 @@ function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
 /** Download the local Gemma model + llamafile runtime used by Ask Twilio. */
 export async function downloadLocalModel(opts: { onLog: LogFn; onDone: (ok: boolean) => void }): Promise<void> {
   const { onLog, onDone } = opts;
-  const ok = await installLocalModel({ onLog, heading: "Local AI model — Gemma 4 E2B via llamafile" });
+  const ok = await installLocalModel({ model: getSelectedModel(), onLog, heading: "Local AI model — Gemma 4 E2B via llamafile" });
   onDone(ok);
 }
 
