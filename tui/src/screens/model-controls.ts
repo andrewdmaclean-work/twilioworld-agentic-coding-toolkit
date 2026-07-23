@@ -16,8 +16,10 @@ export function buildModelControlsScreen(
   opts: {
     status: ToolkitStatus | null;
     reasoningMode: ModelReasoningMode;
+    selectedModelName: string;
     onOpenBrowser: () => void;
     onToggleReasoning: () => void;
+    onChangeModel: () => void;
     onStop: () => void;
     onRemove: () => void;
     onMissingModel: () => void;
@@ -44,6 +46,11 @@ export function buildModelControlsScreen(
         name: `Response style: ${reasoningLabel(opts.reasoningMode)}`,
         description: "Enter cycles through Fast, Light, and Thoughtful",
         onSelect: () => { opts.onToggleReasoning(); return true; },
+      },
+      {
+        name: `Change model: ${opts.selectedModelName}`,
+        description: "switch between Gemma 4 E2B and Phi-4-mini",
+        onSelect: () => { opts.onChangeModel(); return false; },
       },
       {
         name: "Stop local AI",

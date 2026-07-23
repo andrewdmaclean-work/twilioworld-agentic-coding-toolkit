@@ -20,6 +20,7 @@ import { buildLogScreen } from "./screens/log.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
 import { buildModelControlsScreen } from "./screens/model-controls.ts";
+import { buildModelPickerScreen } from "./screens/model-picker.ts";
 import { buildSettingsScreen } from "./screens/settings.ts";
 import { buildResourcesScreen } from "./screens/resources.ts";
 import {
@@ -812,6 +813,7 @@ async function main() {
     showRoute(buildModelControlsScreen(renderer, {
       status: latestStatus,
       reasoningMode,
+      selectedModelName: getSelectedModel().name,
       onOpenBrowser: startBrowserChat,
       onMissingModel: () => flash("Local model not downloaded — install Local Chat from Components", YELLOW),
       onToggleReasoning: () => {
@@ -820,6 +822,19 @@ async function main() {
         stopModelServer();
         flash(`Response style: ${modelReasoningLabel(next)} — applies on next start`, GREEN);
         refreshStatus();
+      },
+      onChangeModel: () => {
+        showRoute(buildModelPickerScreen(renderer, {
+          onModelReady: () => {
+            flash(`Switched to ${getSelectedModel().name}`, GREEN);
+            refreshStatus();
+            back();
+          },
+          onModelNeedsDownload: () => {
+            runAction(`Download ${getSelectedModel().name}`, (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
+          },
+          onCancel: () => showModelControls(),
+        }), "Change model");
       },
       onStop: () => {
         const stopped = stopModelServer();
