@@ -18,6 +18,7 @@ export interface LocalModel {
   dest: string;
   staging: string;
   mmproj?: string;
+  isArchive?: boolean;  // true = tar archive (Gemma default), false = raw GGUF
 }
 
 export const LOCAL_MODELS: LocalModel[] = [
@@ -32,6 +33,7 @@ export const LOCAL_MODELS: LocalModel[] = [
     dest: join(MODELS_DIR, "gemma4-e2b.gguf"),
     staging: join(MODELS_DIR, "gemma4-e2b.download"),
     mmproj: join(MODELS_DIR, "gemma4-e2b-mmproj.gguf"),
+    isArchive: true,
   },
   {
     slug: "phi4-mini",
@@ -56,7 +58,7 @@ export function getModel(slug: string): LocalModel {
 
 export function getSelectedModel(): LocalModel {
   const cfg = readConfig();
-  const slug = (cfg.settings as any).localModelSlug ?? DEFAULT_MODEL_SLUG;
+  const slug = cfg.settings.localModelSlug ?? DEFAULT_MODEL_SLUG;
   return LOCAL_MODELS.find((m) => m.slug === slug) ?? LOCAL_MODELS[0];
 }
 

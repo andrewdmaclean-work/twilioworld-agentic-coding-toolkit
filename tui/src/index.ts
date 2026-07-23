@@ -826,6 +826,7 @@ async function main() {
       onChangeModel: () => {
         showRoute(buildModelPickerScreen(renderer, {
           onModelReady: () => {
+            stopModelServer();
             flash(`Switched to ${getSelectedModel().name}`, GREEN);
             refreshStatus();
             back();

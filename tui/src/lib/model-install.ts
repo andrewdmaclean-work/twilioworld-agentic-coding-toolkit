@@ -191,7 +191,7 @@ export async function installLocalModel(opts: {
 
     mkdirSync(MODELS_DIR, { recursive: true });
     if (!ggufStagingExists(model)) {
-      say(`   Downloading Gemma 4 E2B from Kaggle (~${model.sizeLabel})…`, onLog);
+      say(`   Downloading ${model.name} (~${model.sizeLabel})…`, onLog);
       const weightsProgress = startProgressLogger(model.staging, model.sizeBytes, 3000, onLog, { facts: true });
       const res = await runStreaming("curl", curlDownloadArgs(model.url, model.staging), { cwd: ROOT, onLog });
       clearInterval(weightsProgress);
@@ -204,32 +204,38 @@ export async function installLocalModel(opts: {
       ok(`Archive already present (${(sz / 1_073_741_824).toFixed(1)}GB) — skipping download`, onLog);
     }
 
-    say("   Extracting… this can take a few minutes on a Pi-class machine.", onLog);
-    const extractTmp = mkdtempSync(join(MODELS_DIR, "extract-"));
-    const extractProgress = startExtractionLogger(onLog);
-    const tarRes = await runStreaming("tar", ["-xf", model.staging, "-C", extractTmp], { cwd: ROOT, onLog });
-    clearInterval(extractProgress);
-    if (!tarRes.ok) {
-      err("Extraction failed", onLog);
-      return false;
-    }
+    if (model.isArchive) {
+      say("   Extracting… this can take a few minutes on a Pi-class machine.", onLog);
+      const extractTmp = mkdtempSync(join(MODELS_DIR, "extract-"));
+      const extractProgress = startExtractionLogger(onLog);
+      const tarRes = await runStreaming("tar", ["-xf", model.staging, "-C", extractTmp], { cwd: ROOT, onLog });
+      clearInterval(extractProgress);
+      if (!tarRes.ok) {
+        err("Extraction failed", onLog);
+        return false;
+      }
 
-    const allGgufs = findGgufs(extractTmp);
-    const mmproj = allGgufs.find((f) => f.includes("mmproj"));
-    const mains = allGgufs.filter((f) => !f.includes("mmproj"));
-    const mainGguf = mains.sort((a, b) => statSync(b).size - statSync(a).size)[0];
-    if (!mainGguf) {
-      err("No main model GGUF found in archive. Left everything in place:", onLog);
-      err(`  Archive:   ${model.staging}`, onLog);
-      err(`  Extracted: ${extractTmp}`, onLog);
-      return false;
-    }
+      const allGgufs = findGgufs(extractTmp);
+      const mmproj = allGgufs.find((f) => f.includes("mmproj"));
+      const mains = allGgufs.filter((f) => !f.includes("mmproj"));
+      const mainGguf = mains.sort((a, b) => statSync(b).size - statSync(a).size)[0];
+      if (!mainGguf) {
+        err("No main model GGUF found in archive. Left everything in place:", onLog);
+        err(`  Archive:   ${model.staging}`, onLog);
+        err(`  Extracted: ${extractTmp}`, onLog);
+        return false;
+      }
 
-    renameSync(mainGguf, model.dest);
-    if (mmproj && model.mmproj) renameSync(mmproj, model.mmproj);
-    rmSync(extractTmp, { recursive: true, force: true });
-    ok(`Model ready (${(statSync(model.dest).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
-    if (keepArchiveNotice) ok(`Archive kept at ${model.staging} — delete it to reclaim ~${model.sizeLabel}`, onLog);
+      renameSync(mainGguf, model.dest);
+      if (mmproj && model.mmproj) renameSync(mmproj, model.mmproj);
+      rmSync(extractTmp, { recursive: true, force: true });
+      ok(`Model ready (${(statSync(model.dest).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
+      if (keepArchiveNotice) ok(`Archive kept at ${model.staging} — delete it to reclaim ~${model.sizeLabel}`, onLog);
+    } else {
+      // raw GGUF — just move staging to dest
+      renameSync(model.staging, model.dest);
+      ok(`Model ready (${(statSync(model.dest).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
+    }
   } else {
     ok("Model weights already present", onLog);
   }
