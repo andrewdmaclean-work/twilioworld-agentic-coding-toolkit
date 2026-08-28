@@ -13,6 +13,7 @@ export interface LocalModel {
   description: string;
   // Content-addressed Ollama blob URL — immutable by SHA-256 digest.
   url: string;
+  sha256: string;
   sizeBytes: number;
   sizeLabel: string;
   minBytes: number;
@@ -26,6 +27,7 @@ export const LOCAL_MODELS: LocalModel[] = [
     name: "Gemma 4 E2B",
     description: "Google · multimodal · ~3.3 GB",
     url: "https://registry.ollama.ai/v2/library/gemma4/blobs/sha256:3646b4c147cd235a44d91df1546d3b7d8e29b547dbe4e1f80856419aa455e6fd",
+    sha256: "3646b4c147cd235a44d91df1546d3b7d8e29b547dbe4e1f80856419aa455e6fd",
     sizeBytes: 3_349_514_112,
     sizeLabel: "3.3 GB",
     minBytes: 1_500_000_000,
@@ -37,6 +39,7 @@ export const LOCAL_MODELS: LocalModel[] = [
     name: "Phi-4-mini",
     description: "Microsoft · reasoning + code · ~2.5 GB",
     url: "https://registry.ollama.ai/v2/library/phi4-mini/blobs/sha256:3c168af1dea0a414299c7d9077e100ac763370e5a98b3c53801a958a47f0a5db",
+    sha256: "3c168af1dea0a414299c7d9077e100ac763370e5a98b3c53801a958a47f0a5db",
     sizeBytes: 2_491_874_624,
     sizeLabel: "2.5 GB",
     minBytes: 1_500_000_000,

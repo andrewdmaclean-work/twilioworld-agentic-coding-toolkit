@@ -3,7 +3,7 @@
 import { existsSync, readdirSync, rmSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { capture, have, runStreaming, type LogFn } from "./exec.ts";
+import { capture, have, killModelServer, runStreaming, type LogFn } from "./exec.ts";
 import {
   CONFIG_FILE,
   CONFIG_DIR,
@@ -11,16 +11,15 @@ import {
   MODEL_SERVER_LOG,
   MODELS_DIR,
   NPM_GLOBAL_PREFIX,
+  PI_AGENT_DIR,
   ROOT,
   SKILLS_DIR,
   TOOLS_DIR,
   TOOLCHAINS_DIR,
   TWILIO_CLI_HOME,
-  WHISPERFILE_DEST,
-  WHISPER_MODEL_DEST,
-  WHISPER_MODEL_STAGING,
+  WEBUI_DIR,
 } from "./constants.ts";
-import { getSelectedModel } from "./local-models.ts";
+import { LOCAL_MODELS } from "./local-models.ts";
 
 export type UninstallKey =
   | "devPhone"
@@ -82,14 +81,14 @@ async function removeDevPhone(onLog: LogFn): Promise<boolean> {
 }
 
 async function removeApiKey(onLog: LogFn): Promise<boolean> {
-  step("Toolkit API key", onLog);
+  step("Legacy toolkit API key", onLog);
   if (!have("twilio")) {
     warn("Twilio CLI not found; API key was not checked.", onLog);
     return true;
   }
   const sid = toolkitKeySid();
   if (!sid) {
-    ok("No API key named twilioworld-toolkit found.", onLog);
+    ok("No legacy API key named twilioworld-toolkit found.", onLog);
     return true;
   }
   const res = await runStreaming("twilio", ["api:core:keys:remove", "--sid", sid], { cwd: ROOT, onLog });
@@ -150,25 +149,26 @@ function removeToolkitState(onLog: LogFn): boolean {
   const removed = [
     rmPath(CONFIG_FILE),
     rmPath(join(CONFIG_DIR, ".env")),
-    rmPath(join(CONFIG_DIR, "pi-agent")),
+    rmPath(PI_AGENT_DIR),
+    rmPath(WEBUI_DIR),
     rmPath(TOOLCHAINS_DIR),
   ].filter(Boolean).length;
-  if (removed) ok("Removed .toolkit config, creds file, Pi state, and/or local toolchains.", onLog);
+  if (removed) ok("Removed toolkit settings, legacy credentials, agent state, web UI state, and/or managed tools.", onLog);
   else ok("No local .toolkit state found.", onLog);
   return true;
 }
 
 function removeModelRuntime(onLog: LogFn): boolean {
   step("Local model and runtimes", onLog);
-  const model = getSelectedModel();
+  killModelServer();
   const paths = [
-    model.dest,
-    model.staging,
-    WHISPER_MODEL_DEST,
-    WHISPER_MODEL_STAGING,
+    ...LOCAL_MODELS.flatMap((model) => [model.dest, model.staging]),
+    join(MODELS_DIR, "gemma4-e2b-mmproj.gguf"),
+    join(MODELS_DIR, "whisper-tiny.en-q5_1.bin"),
+    join(MODELS_DIR, "whisper-tiny.en-q5_1.download"),
     MODEL_SERVER_LOG,
     LLAMAFILE_DEST,
-    WHISPERFILE_DEST,
+    join(TOOLS_DIR, "whisperfile"),
     join(TOOLS_DIR, "llamafile.exe"),
     join(TOOLS_DIR, "whisperfile.exe"),
     join(MODELS_DIR, "voice"),

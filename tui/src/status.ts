@@ -20,9 +20,6 @@ import {
   MODEL_SERVER_URL,
   ROOT,
   SKILLS_DIR,
-  WHISPERFILE_DEST,
-  WHISPER_MODEL_DEST,
-  WHISPER_MODEL_MIN_BYTES,
 } from "./lib/constants.ts";
 import { getSelectedModel } from "./lib/local-models.ts";
 import { pathNodeVersionAsync, supportsPiNode } from "./lib/node-version.ts";
@@ -33,12 +30,11 @@ export interface ToolkitStatus {
   twilio:   { installed: boolean; profile: string; sid: string };
   skills:   { count: number; installedCount: number };
   model:    { fileReady: boolean; runtimeReady: boolean; ready: boolean; running: boolean };
-  voice:    { runtimeReady: boolean; modelReady: boolean; recorder: string; ready: boolean };
   devPhone: { installed: boolean };
   opencode: { installed: boolean; version: string };
   pi:       { installed: boolean };
+  agents:   { installedCount: number };
   node:     { version: string; supportsPi: boolean };
-  localGemmaAvailable: boolean;
   addons:   Record<string, boolean>;
 }
 
@@ -55,11 +51,6 @@ function ggufReady(): boolean {
   const model = getSelectedModel();
   if (!existsSync(model.dest)) return false;
   try { return statSync(model.dest).size >= model.minBytes; } catch { return false; }
-}
-
-function whisperModelReady(): boolean {
-  if (!existsSync(WHISPER_MODEL_DEST)) return false;
-  try { return statSync(WHISPER_MODEL_DEST).size >= WHISPER_MODEL_MIN_BYTES; } catch { return false; }
 }
 
 function countSkills(dir: string): number {
@@ -81,8 +72,6 @@ async function computeStatus(): Promise<ToolkitStatus> {
   // fs-only checks are cheap and synchronous is fine for them.
   const fileReady = ggufReady();
   const runtimeReady = fileExecutable(LLAMAFILE_DEST);
-  const whisperRuntimeReady = fileExecutable(WHISPERFILE_DEST);
-  const whisperReady = whisperModelReady();
   const skillCount = countSkills(SKILLS_DIR);
   const installedSkillCount =
     countSkills(join(homedir(), ".agents", "skills", "twilio")) +
@@ -90,15 +79,16 @@ async function computeStatus(): Promise<ToolkitStatus> {
   const cfg = readConfig();
 
   // Round 1: independent existence/version checks, all in flight together.
-  const [twilioInstalled, opencodeInstalled, piInstalled, nodeInfo, modelPing, hasRec, hasFfmpeg, hasArecord] = await Promise.all([
+  const [twilioInstalled, opencodeInstalled, piInstalled, claudeInstalled, codexInstalled, cursorInstalled, copilotInstalled, nodeInfo, modelPing] = await Promise.all([
     haveAsync("twilio"),
     haveAsync("opencode"),
     haveAsync("pi"),
+    haveAsync("claude"),
+    haveAsync("codex"),
+    haveAsync("cursor-agent"),
+    haveAsync("copilot"),
     pathNodeVersionAsync(),
     (fileReady && runtimeReady) ? captureAsync("curl", ["-fsS", MODEL_SERVER_URL]) : Promise.resolve(""),
-    haveAsync("rec"),
-    haveAsync("ffmpeg"),
-    haveAsync("arecord"),
   ]);
 
   // Round 2: calls that depend on round 1's installed-checks — the two
@@ -120,19 +110,17 @@ async function computeStatus(): Promise<ToolkitStatus> {
 
   const running = Boolean(modelPing);
   const supportsPi = supportsPiNode(nodeInfo);
-  const localGemmaAvailable = cfg.addons.localGemma || (fileReady && runtimeReady);
-  const recorder = hasRec ? "rec" : hasFfmpeg ? "ffmpeg" : hasArecord ? "arecord" : "";
+  const installedCount = [opencodeInstalled, piInstalled, claudeInstalled, codexInstalled, cursorInstalled, copilotInstalled].filter(Boolean).length;
 
   return {
     twilio:   { installed: twilioInstalled, profile, sid },
     skills:   { count: skillCount, installedCount: installedSkillCount },
     model:    { fileReady, runtimeReady, ready: fileReady && runtimeReady, running },
-    voice:    { runtimeReady: whisperRuntimeReady, modelReady: whisperReady, recorder, ready: whisperRuntimeReady && whisperReady && Boolean(recorder) },
     devPhone: { installed: pluginsRaw.includes("plugin-dev-phone") },
     opencode: { installed: opencodeInstalled, version: opencodeVersionRaw.split("\n")[0] },
     pi:       { installed: piInstalled },
+    agents:   { installedCount },
     node:     { version: nodeInfo?.raw ?? "not found", supportsPi },
-    localGemmaAvailable,
     addons:   cfg.addons as Record<string, boolean>,
   };
 }

@@ -14,7 +14,6 @@ import {
 import { invalidateStatusCache, readStatusAsync, type ToolkitStatus } from "./status.ts";
 import { existsSync } from "fs";
 import { buildAgentScreen } from "./screens/agent.ts";
-import { buildChatScreen } from "./screens/chat.ts";
 import { buildSubmenuScreen } from "./screens/submenu.ts";
 import { buildLogScreen } from "./screens/log.ts";
 import { buildSetupScreen } from "./screens/setup.ts";
@@ -23,25 +22,28 @@ import { buildModelControlsScreen } from "./screens/model-controls.ts";
 import { buildModelPickerScreen } from "./screens/model-picker.ts";
 import { buildSettingsScreen } from "./screens/settings.ts";
 import { buildResourcesScreen } from "./screens/resources.ts";
+import { buildUninstallScreen } from "./screens/uninstall.ts";
+import { buildLocalChatScreen } from "./screens/local-chat.ts";
+import { configureAgent } from "./lib/configure-agent.ts";
 import {
   downloadLocalModel, installDevPhone, installTwilioCli,
   openDevPhone, openTwilioLogin, openTwilioTerminal, stopModelServer,
-  setupExecuteMcp, listTwilioProfiles, useTwilioProfile, activeAccountSid,
+  listTwilioProfiles, useTwilioProfile,
 } from "./lib/actions.ts";
-import { buildCredsPromptScreen } from "./screens/creds-prompt.ts";
-import { loadToolkitEnv } from "./lib/env.ts";
 import { runUninstall, type UninstallKey } from "./lib/uninstall.ts";
 import { buildInvadersScreen } from "./screens/invaders.ts";
-import { modelReasoningMode, setModelReasoningMode, type ModelReasoningMode } from "./lib/config.ts";
+import { addonEnabled, modelReasoningMode, setModelReasoningMode, setThinkingVisible, thinkingVisible, type ModelReasoningMode } from "./lib/config.ts";
 import {
   LLAMAFILE_DEST, ROOT, MODEL_SERVER_PID, MODEL_SERVER_PORT, MODEL_SERVER_URL, CONFIG_FILE,
 } from "./lib/constants.ts";
 import { getSelectedModel } from "./lib/local-models.ts";
-import { MODEL_SERVER_LOG, serverArgs } from "./lib/model.ts";
+import { MODEL_SERVER_LOG, serverArgs, waitForModelServer } from "./lib/model.ts";
 import { openUrl, openLlamaWebUi, startMcpProxy, capture, have, startDaemon } from "./lib/exec.ts";
+import { prepareBrowserMcpUi, webUiStaticAssetsReady } from "./lib/webui-config.ts";
 import { pathNodeVersion, supportsPiNode } from "./lib/node-version.ts";
 import { THEME } from "./theme.ts";
 import { SELECT_STYLE, shortcutBar } from "./ui-style.ts";
+import { detailFor, headlineText, nextMove, statusLines, visibleItems, type ItemId, type MenuItem } from "./dashboard-content.ts";
 
 // ── Palette ──────────────────────────────────────────────────────────
 const RED      = THEME.red;
@@ -144,186 +146,19 @@ function wrapText(text: string, width: number): string {
   return out.join("\n");
 }
 
-function nextMove(s: ToolkitStatus | null): string {
-  if (!s) return "Loading local status.";
-  if (!s.model.ready) return `Ask Twilio will download the local model (~${getSelectedModel().sizeLabel}) on first use.`;
-  if (!s.twilio.installed) return "Twilio CLI opens/installs from the Twilio CLI menu when you need it.";
-  return "Ask Twilio, configure an agent, or open Dev Phone.";
-}
-
-function headlineText(s: ToolkitStatus | null): string {
-  const model = s?.model.running ? "model online" : s?.model.ready ? "model ready" : "model not downloaded";
-  const twilio = s?.twilio.sid ? `Twilio ${s.twilio.profile}` : "Twilio not logged in";
-  return [model, twilio].filter(Boolean).join("  |  ");
-}
-
 function modelReasoningLabel(mode: ModelReasoningMode): string {
-  if (mode === "on") return "Thoughtful";
-  if (mode === "auto") return "Light";
-  return "Fast";
+  return mode[0].toUpperCase() + mode.slice(1);
 }
 
 function nextModelReasoningMode(mode: ModelReasoningMode): ModelReasoningMode {
-  if (mode === "off") return "auto";
-  if (mode === "auto") return "on";
+  if (mode === "off") return "low";
+  if (mode === "low") return "medium";
+  if (mode === "medium") return "high";
   return "off";
-}
-
-// ── Status rail ──────────────────────────────────────────────────────
-function statusLines(s: ToolkitStatus | null) {
-  const row = (icon: string, label: string, value: string, fg: string) => ({
-    text: `  ${icon}  ${label.padEnd(11)} ${value}`,
-    fg,
-  });
-  if (!s) return [
-    row("◌", "Model", "Checking", DIM2),
-    row("◌", "Twilio", "Checking", DIM2),
-    row("◌", "Agents", "Checking", DIM2),
-    row("◌", "Docs MCP", "Checking", DIM2),
-    row("◌", "Dev Phone", "Checking", DIM2),
-  ];
-
-  const agentCount = Number(s.pi.installed) + Number(s.opencode.installed);
-  return [
-    s.model.running
-      ? row("●", "Model", `Online :${MODEL_SERVER_PORT}`, GREEN)
-      : s.model.ready ? row("●", "Model", "Ready", CYAN) : row("○", "Model", "Not installed", DIM2),
-    s.twilio.sid
-      ? row("●", "Twilio", s.twilio.profile || "Connected", GREEN)
-      : s.twilio.installed ? row("○", "Twilio", "Sign-in needed", YELLOW) : row("○", "Twilio", "CLI not installed", DIM2),
-    agentCount > 0
-      ? row("●", "Agents", `${agentCount} detected`, CYAN) : row("○", "Agents", "None detected", DIM2),
-    (s.skills.installedCount ?? 0) > 0
-      ? row("●", "Docs MCP", `${s.skills.installedCount} skills ready`, GREEN) : row("○", "Docs MCP", "Setup needed", DIM2),
-    s.devPhone.installed
-      ? row("●", "Dev Phone", "Installed", CYAN) : row("○", "Dev Phone", "Optional", DIM2),
-  ];
-}
-
-// ── Menu definition ──────────────────────────────────────────────────
-type ItemId = "chat"|"agent"|"devphone"|"cli"|"resources"|"settings"|"exit";
-
-interface MenuItem {
-  id: ItemId;
-  label: (s: ToolkitStatus | null) => string;
-  detail: (s: ToolkitStatus | null) => string;
-  visible: (s: ToolkitStatus) => boolean;
 }
 
 function doneLabel(done: boolean, label: string): string {
   return done ? `✓ ${label}` : label;
-}
-
-const ALL_ITEMS: MenuItem[] = [
-  { id: "chat",
-    label: (s) => doneLabel(Boolean(s?.model.ready), "Ask Twilio"),
-    detail: (s) => s?.model.ready ? "local AI chat — model downloaded" : "local AI chat — downloads model on first use",
-    visible: () => true },
-
-  { id: "agent",
-    label: () => "Configure agent",
-    detail: () => "wire Skills + Docs MCP into Pi, Claude Code, Cursor, Codex, OpenCode, Copilot",
-    visible: () => true },
-
-  { id: "devphone",
-    label: (s) => doneLabel(Boolean(s?.devPhone.installed), "Dev Phone"),
-    detail: (s) => s?.devPhone.installed ? "browser soft phone — installed" : "browser soft phone — real SMS + voice",
-    visible: () => true },
-
-  { id: "cli",
-    label: (s) => doneLabel(Boolean(s?.twilio.installed), "Twilio CLI"),
-    detail: (s) => s?.twilio.sid ? `logged in as ${s.twilio.profile}` : s?.twilio.installed ? "installed, not logged in" : "open a terminal, log in, check account, or uninstall",
-    visible: () => true },
-
-  { id: "resources",
-    label: () => "Resources",
-    detail: () => "TwilioWorld and Twilio AI Docs",
-    visible: () => true },
-
-  { id: "settings",
-    label: () => "Settings",
-    detail: () => "choose components or manage the local AI model",
-    visible: () => true },
-
-  { id: "exit",
-    label: () => "Exit",
-    detail: () => "",
-    visible: () => true },
-];
-
-function visibleItems(s: ToolkitStatus | null): MenuItem[] {
-  return ALL_ITEMS.filter((m) => (s ? m.visible(s) : true));
-}
-
-function yesNo(v: boolean): string {
-  return v ? "Ready" : "Needs setup";
-}
-
-function detailFor(item: MenuItem | undefined, s: ToolkitStatus | null): string {
-  if (!item || item.id === "exit") return "";
-  switch (item.id) {
-    case "chat":
-      return [
-        "OVERVIEW",
-        "  Ask Twilio questions using local AI grounded in Twilio Skills and",
-        "  current documentation.",
-        "",
-        "READINESS",
-        `  Runtime       ${yesNo(Boolean(s?.model.runtimeReady))}`,
-        `  Weights       ${yesNo(Boolean(s?.model.fileReady))}`,
-        `  Service       ${s?.model.running ? "Online" : "Stopped"}`,
-        "",
-        s?.model.ready
-          ? "RESULT\n  Private, local answers grounded in Twilio guidance."
-          : `DOWNLOAD\n  Local model and runtime, approximately ${getSelectedModel().sizeLabel}.`,
-      ].join("\n");
-    case "agent":
-      return [
-        "OVERVIEW",
-        "  Wire Twilio Skills + Docs MCP into whichever coding agent you pick,",
-        "  then launch it. Pi is installed + launched for you; others get wired.",
-        "",
-        "INCLUDED",
-        "  Twilio Skills + Docs MCP (no auth, no config needed)",
-        "",
-        "EXECUTE MCP",
-        `  Read-only credentials  ${yesNo(Boolean(process.env.TWILIO_MCP_CREDS))}`,
-      ].join("\n");
-    case "devphone":
-      return [
-        "OVERVIEW",
-        "  Browser soft phone — send/receive real SMS and voice with no device.",
-        "",
-        "READINESS",
-        `  Twilio CLI    ${yesNo(Boolean(s?.twilio.installed))}`,
-        `  Dev Phone     ${yesNo(Boolean(s?.devPhone.installed))}`,
-        `  Account       ${s?.twilio.sid ? "Connected" : "Needs sign-in"}`,
-        "",
-        "NOTICE",
-        "  Use a spare number; Dev Phone can replace its webhook settings.",
-      ].join("\n");
-    case "cli":
-      return [
-        "OVERVIEW",
-        "  Twilio CLI hub — open a terminal, log in, check your account, or",
-        "  uninstall the CLI.",
-        "",
-        "STATUS",
-        `  CLI           ${yesNo(Boolean(s?.twilio.installed))}`,
-        s?.twilio.sid ? `  Account       ${s.twilio.profile} (${s.twilio.sid})` : "  Account       Not connected",
-      ].join("\n");
-    case "resources":
-      return [
-        "RESOURCES",
-        "  Open TwilioWorld or browse the Twilio AI documentation.",
-      ].join("\n");
-    case "settings":
-      return [
-        "SETTINGS",
-        "  Components     Choose and install Ask Twilio or Dev Phone.",
-        "  Local AI       Browser chat, response style, process, and storage.",
-      ].join("\n");
-  }
 }
 
 // ── Dashboard factory ────────────────────────────────────────────────
@@ -581,7 +416,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
       text.fg = line?.fg ?? DIM;
     });
 
-    const items = visibleItems(s);
+    const items = visibleItems();
     lastItems = items;
 
     // Preserve selection by id across updates
@@ -687,7 +522,6 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
 
 // ── Main ─────────────────────────────────────────────────────────────
 async function main() {
-  loadToolkitEnv();
   assertInteractiveTerminal();
   assertCompatibleNode();
   assertNotRoot();
@@ -794,34 +628,62 @@ async function main() {
     }, () => back()), title);
   }
 
-  function startBrowserChat(): void {
-    startMcpProxy();
+  async function startBrowserChat(): Promise<void> {
+    const docsEnabled = addonEnabled("docsMcp");
+    if (docsEnabled) startMcpProxy();
     if (!Boolean(capture("curl", ["-fsS", MODEL_SERVER_URL]))) {
       startDaemon(LLAMAFILE_DEST, serverArgs(), { cwd: ROOT, logFile: MODEL_SERVER_LOG, pidFile: MODEL_SERVER_PID });
       flash(`Starting model server on :${MODEL_SERVER_PORT}…`, GREEN);
       refreshStatus();
-      setTimeout(() => { refreshStatus(); openLlamaWebUi(); }, 3000);
-      return;
+      const ready = await waitForModelServer();
+      refreshStatus();
+      if (!ready) {
+        flash(`Local AI did not start — see ${MODEL_SERVER_LOG}`, THEME.danger);
+        return;
+      }
     }
-    openLlamaWebUi();
-    flash("Opening web UI in your browser", GREEN);
+    if (docsEnabled && !webUiStaticAssetsReady()) {
+      try {
+        flash("Preparing Twilio Docs for browser chat…", GREEN);
+        await prepareBrowserMcpUi(true);
+        stopModelServer();
+        startMcpProxy();
+        startDaemon(LLAMAFILE_DEST, serverArgs(), { cwd: ROOT, logFile: MODEL_SERVER_LOG, pidFile: MODEL_SERVER_PID });
+        if (!await waitForModelServer()) {
+          flash(`Local AI did not restart — see ${MODEL_SERVER_LOG}`, THEME.danger);
+          return;
+        }
+      } catch (error) {
+        flash(`Could not activate Docs in browser chat: ${(error as Error).message}`, THEME.danger);
+        return;
+      }
+    }
+    const result = openLlamaWebUi();
+    flash(result.ok ? "Opening browser chat" : `Could not open browser: ${result.error}`, result.ok ? GREEN : THEME.danger);
     refreshStatus();
   }
 
   function showModelControls(): void {
     const reasoningMode = modelReasoningMode();
+    const showThinking = thinkingVisible();
     showRoute(buildModelControlsScreen(renderer, {
       status: latestStatus,
       reasoningMode,
+      showThinking,
       selectedModelName: getSelectedModel().name,
-      onOpenBrowser: startBrowserChat,
-      onMissingModel: () => flash("Local model not downloaded — install Local Chat from Components", YELLOW),
-      onToggleReasoning: () => {
-        const next = nextModelReasoningMode(reasoningMode);
+      onToggleThinking: (current) => {
+        const next = !current;
+        setThinkingVisible(next);
+        flash(`Show reasoning: ${next ? "Yes" : "No"} — applies to Pi on next start`, GREEN);
+        return next;
+      },
+      onToggleReasoning: (current) => {
+        const next = nextModelReasoningMode(current);
         setModelReasoningMode(next);
         stopModelServer();
-        flash(`Response style: ${modelReasoningLabel(next)} — applies on next start`, GREEN);
+        flash(`Reasoning effort: ${modelReasoningLabel(next)} — applies on next start`, GREEN);
         refreshStatus();
+        return next;
       },
       onChangeModel: () => {
         showRoute(buildModelPickerScreen(renderer, {
@@ -852,7 +714,7 @@ async function main() {
     switch (opt.value as ItemId) {
       case "exit": shutdown(0); break;
 
-      case "agent": busy = true; showRoute(buildAgentScreen(renderer, back, back), "Configure Agent"); break;
+      case "agent": busy = true; showRoute(buildAgentScreen(renderer, back, back), "Set up a coding agent"); break;
 
       case "resources": {
         busy = true;
@@ -873,44 +735,38 @@ async function main() {
       case "settings": {
         busy = true;
         showRoute(buildSettingsScreen(renderer, {
-          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Setup"),
+          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Install or repair"),
           onModelControls: showModelControls,
+          onUninstall: () => showRoute(buildUninstallScreen(renderer, back, back), "Uninstall or reset"),
           onCancel: back,
         }), "Settings");
         break;
       }
 
-      case "chat": {
+      case "localchat": {
         busy = true;
-        if (latestStatus?.model.ready) {
-          showRoute(buildChatScreen(renderer, back), "Chat");
-          break;
-        }
-        showRoute(buildSubmenuScreen(renderer, {
-          id: "chat-download-screen",
-          route: "Dashboard / Ask Twilio",
-          title: "Ask Twilio needs local AI",
-          subtitle: `The model downloads once and uses approximately ${getSelectedModel().sizeLabel}.`,
-          bodyTitle: "Set up Ask Twilio",
-          options: [
-            {
-              name: "Download local model",
-              description: "install the private local model, then return to Ask Twilio",
-              onSelect: () => {
-                runAction("Download local model", (onLog, onDone) => downloadLocalModel({ onLog, onDone }));
-                return false;
+        showRoute(buildLocalChatScreen(renderer, {
+          modelReady: Boolean(latestStatus?.model.ready),
+          piReady: Boolean(latestStatus?.pi.installed && latestStatus.model.ready),
+          modelSize: getSelectedModel().sizeLabel,
+          onBrowser: () => {
+            if (latestStatus?.model.ready) {
+              void startBrowserChat();
+              return;
+            }
+            runAction("Install local chat", (onLog, onDone) => downloadLocalModel({
+              onLog,
+              onDone: (ok) => {
+                if (ok) void startBrowserChat();
+                onDone(ok);
               },
-            },
-            {
-              name: "Review Components",
-              description: "choose which toolkit components to install",
-              onSelect: () => {
-                showRoute(buildSetupScreen(renderer, back, back), "Setup");
-                return false;
-              },
-            },
-          ],
-        }, back), "Ask Twilio setup");
+            }));
+          },
+          onPi: () => runAction("Set up and open Pi", (onLog, onDone) => configureAgent({
+            agent: "Pi (lightweight TUI)", onLog, onDone,
+          })),
+          onCancel: back,
+        }), "Local chat");
         break;
       }
 
@@ -1044,42 +900,10 @@ async function main() {
               },
             },
 	            {
-	              name: doneLabel(Boolean(process.env.TWILIO_MCP_CREDS), "Enable Execute MCP (read-only)"),
-	              description: process.env.TWILIO_MCP_CREDS ? "creds already loaded" : "create a read-only API key so agents can inspect your account",
-              onSelect: () => {
-                if (!have("twilio")) { flash("⚠  Toolkit-local Twilio CLI not installed", YELLOW); return false; }
-                // Restricted-key creation needs the Account SID + Auth Token
-                // (the CLI's stored API key can't create keys). Prompt for them.
-                showRoute(buildCredsPromptScreen(renderer, {
-                  prefillSid: activeAccountSid(),
-                  onCancel: showCliMenu,
-                  onSubmit: (sid, token) => {
-                    runAction("Enable Execute MCP (read-only)", (onLog, onDone) =>
-                      setupExecuteMcp({ accountSid: sid, authToken: token, onLog, onDone: (ok) => {
-                        // Load the freshly-written creds into this process so
-                        // Configure Agent picks up the Execute MCP immediately,
-                        // without needing a toolkit restart.
-                        if (ok) loadToolkitEnv();
-                        onDone(ok);
-                      } }));
-                  },
-                }), "Execute MCP credentials");
-                return false;
-              },
-            },
-	            {
 	              name: "Uninstall Twilio CLI",
 	              description: latestStatus?.twilio.installed ? "remove .toolkit-local Twilio CLI + profiles" : "not installed",
               onSelect: () => {
                 runAction("Uninstall Twilio CLI", (onLog, onDone) => runUninstall({ keys: ["twilioCli"] as UninstallKey[], onLog, onDone }));
-                return false;
-              },
-            },
-            {
-              name: "Delete Execute MCP key",
-              description: "remove the twilioworld-toolkit API key + local creds",
-              onSelect: () => {
-                runAction("Delete Execute MCP key", (onLog, onDone) => runUninstall({ keys: ["apiKey"] as UninstallKey[], onLog, onDone }));
                 return false;
               },
             },

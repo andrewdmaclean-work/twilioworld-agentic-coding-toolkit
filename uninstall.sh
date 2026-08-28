@@ -9,7 +9,7 @@
 #   • the scoped API key this kit minted
 #   • Twilio/SendGrid skills installed into ~/.agents/skills/
 #   • local toolkit copy of Twilio Skills
-#   • local .toolkit config, Execute MCP creds file, and Pi state
+#   • local .toolkit config, legacy credentials file, and Pi state
 #   • downloaded model + llamafile/whisperfile binaries (in-repo)
 #
 # It does NOT touch your normal/system Twilio CLI install or profile. It may
@@ -80,12 +80,16 @@ find_toolkit_key_sid() {
   fi
 }
 
-printf '\n=== TwilioWorld AI Toolkit — Uninstall ===\n\n'
+printf '\n=== TwilioWorld Agentic Coding Toolkit — Uninstall ===\n\n'
 
 # 1. Dev Phone plugin
 if toolkit_twilio && twilio_env twilio plugins 2>/dev/null | grep -q "plugin-dev-phone"; then
   if ask "Remove Dev Phone plugin?"; then
-    twilio_env twilio plugins:remove @twilio-labs/plugin-dev-phone >/dev/null 2>&1 && ok "Dev Phone removed" || warn "removal failed"
+    if twilio_env twilio plugins:remove @twilio-labs/plugin-dev-phone >/dev/null 2>&1; then
+      ok "Dev Phone removed"
+    else
+      warn "removal failed"
+    fi
   fi
 fi
 
@@ -94,7 +98,11 @@ if toolkit_twilio; then
   if ask "Delete the API key this kit created (friendly name 'twilioworld-toolkit')?"; then
     SK="$(find_toolkit_key_sid)"
     if [[ -n "$SK" ]]; then
-      twilio_env twilio api:core:keys:remove --sid "$SK" >/dev/null 2>&1 && ok "API key $SK deleted" || warn "could not delete $SK"
+      if twilio_env twilio api:core:keys:remove --sid "$SK" >/dev/null 2>&1; then
+        ok "API key $SK deleted"
+      else
+        warn "could not delete $SK"
+      fi
     else
       warn "No matching key found (may already be deleted)."
     fi
@@ -107,57 +115,77 @@ if toolkit_twilio || [[ -d "$TOOLKIT_NPM_PREFIX" || -d "$TOOLKIT_TWILIO_HOME" ]]
     if have npm; then
       npm uninstall --prefix "$TOOLKIT_NPM_PREFIX" -g twilio-cli >/dev/null 2>&1 || warn "npm removal failed; removing local files directly"
     fi
-    rm -rf "$TOOLKIT_NPM_PREFIX/bin/twilio" "$TOOLKIT_NPM_PREFIX/bin/twilio.cmd" \
-           "$TOOLKIT_NPM_PREFIX/lib/node_modules/twilio-cli" "$TOOLKIT_TWILIO_HOME" \
-      && ok "toolkit-local Twilio CLI/profile state removed" || warn "removal failed"
+    if rm -rf "$TOOLKIT_NPM_PREFIX/bin/twilio" "$TOOLKIT_NPM_PREFIX/bin/twilio.cmd" \
+      "$TOOLKIT_NPM_PREFIX/lib/node_modules/twilio-cli" "$TOOLKIT_TWILIO_HOME"; then
+      ok "toolkit-local Twilio CLI/profile state removed"
+    else
+      warn "removal failed"
+    fi
   fi
 fi
 
 # 4. Toolkit-local Bun/Node toolchains
 if [[ -d "$TOOLKIT_TOOLCHAINS" ]]; then
   if ask "Remove toolkit-local Bun/Node toolchains?"; then
-    rm -rf "$TOOLKIT_TOOLCHAINS" \
-      && ok "toolkit-local Bun/Node toolchains removed" || warn "removal failed"
+    if rm -rf "$TOOLKIT_TOOLCHAINS"; then
+      ok "toolkit-local Bun/Node toolchains removed"
+    else
+      warn "removal failed"
+    fi
   fi
 fi
 
 # 5. Global skills copy
 if [[ -d "$HOME/.agents/skills/twilio" || -d "$HOME/.agents/skills/sendgrid" ]]; then
   if ask "Remove Twilio Skills installed for agents under ~/.agents/skills/?"; then
-    rm -rf "$HOME/.agents/skills/twilio" "$HOME/.agents/skills/sendgrid" \
-      && ok "removed Twilio Skills from \$HOME/.agents/skills/" || warn "removal failed"
+    if rm -rf "$HOME/.agents/skills/twilio" "$HOME/.agents/skills/sendgrid"; then
+      ok "removed Twilio Skills from \$HOME/.agents/skills/"
+    else
+      warn "removal failed"
+    fi
   fi
 fi
 
 # 6. Local toolkit skills copy
 if [[ -d "$ROOT/vendor/twilio-ai/skills" ]]; then
   if ask "Remove the local toolkit copy of Twilio Skills?"; then
-    rm -rf "$ROOT/vendor/twilio-ai/skills" \
-      && ok "removed local toolkit copy of Twilio Skills" || warn "removal failed"
+    if rm -rf "$ROOT/vendor/twilio-ai/skills"; then
+      ok "removed local toolkit copy of Twilio Skills"
+    else
+      warn "removal failed"
+    fi
     warn "Run Setup to download the local toolkit copy again."
   fi
 fi
 
 # 7. Local toolkit config/state
 if [[ -f "$ROOT/.toolkit/config.json" || -f "$ROOT/.toolkit/.env" || -d "$ROOT/.toolkit/pi-agent" || -d "$ROOT/.toolkit/webui" ]]; then
-  if ask "Delete local toolkit config, Execute MCP creds file, web UI state, and Pi state in .toolkit/?"; then
-    rm -rf "$ROOT/.toolkit/config.json" "$ROOT/.toolkit/.env" "$ROOT/.toolkit/pi-agent" "$ROOT/.toolkit/webui" \
-      && ok "local toolkit state removed" || warn "removal failed"
+  if ask "Delete local toolkit settings, legacy credentials, web UI state, and Pi state in .toolkit/?"; then
+    if rm -rf "$ROOT/.toolkit/config.json" "$ROOT/.toolkit/.env" "$ROOT/.toolkit/pi-agent" "$ROOT/.toolkit/webui"; then
+      ok "local toolkit state removed"
+    else
+      warn "removal failed"
+    fi
   fi
 fi
 
 # 8. In-repo model + runtime
 if [[ -f "$ROOT/models/gemma4-e2b.gguf" || -e "$ROOT/tools/llamafile" \
    || -f "$ROOT/models/gemma4-e2b.download" || -f "$ROOT/models/gemma4-e2b-mmproj.gguf" \
+   || -f "$ROOT/models/phi4-mini.gguf" || -f "$ROOT/models/phi4-mini.download" \
    || -f "$ROOT/models/whisper-tiny.en-q5_1.bin" || -e "$ROOT/tools/whisperfile" \
    || -e "$ROOT/tools/llamafile.exe" || -e "$ROOT/tools/whisperfile.exe" ]]; then
   if ask "Delete downloaded local AI runtimes and model files in this repo?"; then
-    rm -f "$ROOT/models/gemma4-e2b.gguf" "$ROOT/models/gemma4-e2b-mmproj.gguf" \
-          "$ROOT/models/gemma4-e2b.download" "$ROOT/models/whisper-tiny.en-q5_1.bin" \
+    if rm -f "$ROOT/models/gemma4-e2b.gguf" "$ROOT/models/gemma4-e2b-mmproj.gguf" \
+          "$ROOT/models/gemma4-e2b.download" "$ROOT/models/phi4-mini.gguf" \
+          "$ROOT/models/phi4-mini.download" "$ROOT/models/whisper-tiny.en-q5_1.bin" \
           "$ROOT/models/whisper-tiny.en-q5_1.download" "$ROOT/models/pi-server.log" \
           "$ROOT/tools/llamafile" "$ROOT/tools/llamafile.exe" \
-          "$ROOT/tools/whisperfile" "$ROOT/tools/whisperfile.exe" \
-      && ok "local model files removed" || warn "removal failed"
+          "$ROOT/tools/whisperfile" "$ROOT/tools/whisperfile.exe"; then
+      ok "local model files removed"
+    else
+      warn "removal failed"
+    fi
     rm -rf "$ROOT"/models/extract-* "$ROOT/models/extract_tmp" "$ROOT/models/voice"
   fi
 fi

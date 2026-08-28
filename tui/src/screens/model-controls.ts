@@ -3,12 +3,10 @@ import type { ToolkitStatus } from "../status.ts";
 import type { ModelReasoningMode } from "../lib/config.ts";
 import { MODEL_SERVER_PORT } from "../lib/constants.ts";
 import { getSelectedModel } from "../lib/local-models.ts";
-import { buildSubmenuScreen } from "./submenu.ts";
+import { buildSubmenuScreen, type SubmenuOption } from "./submenu.ts";
 
 function reasoningLabel(mode: ModelReasoningMode): string {
-  if (mode === "on") return "Thoughtful";
-  if (mode === "auto") return "Light";
-  return "Fast";
+  return mode[0].toUpperCase() + mode.slice(1);
 }
 
 export function buildModelControlsScreen(
@@ -16,40 +14,50 @@ export function buildModelControlsScreen(
   opts: {
     status: ToolkitStatus | null;
     reasoningMode: ModelReasoningMode;
+    showThinking: boolean;
     selectedModelName: string;
-    onOpenBrowser: () => void;
-    onToggleReasoning: () => void;
+    onToggleThinking: (current: boolean) => boolean;
+    onToggleReasoning: (current: ModelReasoningMode) => ModelReasoningMode;
     onChangeModel: () => void;
     onStop: () => void;
     onRemove: () => void;
-    onMissingModel: () => void;
     onCancel: () => void;
   },
 ): BoxRenderable {
+  let showThinking = opts.showThinking;
+  const thinkingOption: SubmenuOption = {
+    name: `Show reasoning: ${showThinking ? "Yes" : "No"}`,
+    description: "shows or hides Pi reasoning blocks without changing reasoning effort",
+    onSelect: () => {
+      showThinking = opts.onToggleThinking(showThinking);
+      thinkingOption.name = `Show reasoning: ${showThinking ? "Yes" : "No"}`;
+      return false;
+    },
+  };
+
+  let reasoningMode = opts.reasoningMode;
+  const effortOption: SubmenuOption = {
+    name: `Reasoning effort: ${reasoningLabel(reasoningMode)}`,
+    description: "Off disables reasoning; Low, Medium, and High stay independent from its display",
+    onSelect: () => {
+      reasoningMode = opts.onToggleReasoning(reasoningMode);
+      effortOption.name = `Reasoning effort: ${reasoningLabel(reasoningMode)}`;
+      return false;
+    },
+  };
+
   return buildSubmenuScreen(renderer, {
     id: "model-controls-screen",
     route: "Dashboard / Settings / Local AI model",
-    title: "Local AI model",
-    subtitle: "Use browser chat, choose a response style, or manage local files.",
-    bodyTitle: "Local AI model",
+    title: "Manage local AI",
+    subtitle: "Choose how local AI runs and how much storage it uses.",
+    bodyTitle: "Local AI",
     options: [
+      thinkingOption,
+      effortOption,
       {
-        name: "Open browser chat",
-        description: opts.status?.model.ready ? "start the model if needed, then open chat in your browser" : "install Local Chat from Components first",
-        onSelect: () => {
-          if (!opts.status?.model.ready) { opts.onMissingModel(); return false; }
-          opts.onOpenBrowser();
-          return true;
-        },
-      },
-      {
-        name: `Response style: ${reasoningLabel(opts.reasoningMode)}`,
-        description: "Enter cycles through Fast, Light, and Thoughtful",
-        onSelect: () => { opts.onToggleReasoning(); return true; },
-      },
-      {
-        name: `Change model: ${opts.selectedModelName}`,
-        description: "switch between Gemma 4 E2B and Phi-4-mini",
+        name: `Model: ${opts.selectedModelName}`,
+        description: "choose the local model shared by the browser interface and Pi",
         onSelect: () => { opts.onChangeModel(); return false; },
       },
       {

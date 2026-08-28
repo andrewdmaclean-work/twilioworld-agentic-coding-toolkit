@@ -18,16 +18,16 @@ import { buildLogScreen } from "./log.ts";
 type UninstallItem = CheckItem & { key: UninstallKey | `__${string}` };
 
 const UNINSTALL_ITEMS: UninstallItem[] = [
-  { key: "__twilio", label: "Twilio account and CLI", description: "Remove optional Twilio tooling or the toolkit-created API key.", heading: true },
+  { key: "__twilio", label: "Twilio account and CLI", description: "Remove optional Twilio tooling or data left by an older toolkit version.", heading: true },
   { key: "devPhone" as UninstallKey, label: "Dev Phone plugin", description: "Remove @twilio-labs/plugin-dev-phone from the Twilio CLI" },
-  { key: "apiKey" as UninstallKey, label: "Toolkit API key", description: "Delete the Twilio API key named twilioworld-toolkit" },
+  { key: "apiKey" as UninstallKey, label: "Legacy toolkit API key", description: "delete the restricted key named twilioworld-toolkit, if an older version created one" },
   { key: "twilioCli" as UninstallKey, label: "Toolkit-local Twilio CLI", description: "Remove .toolkit/npm-global and isolated Twilio CLI profile state" },
   { key: "__agents", label: "Coding agents", description: "Remove Twilio Skills installed where agents look for them.", heading: true },
   { key: "skills" as UninstallKey, label: "Twilio Skills installed for agents", description: "Remove twilio/ and sendgrid/ from ~/.agents/skills/" },
   { key: "__local", label: "Local toolkit files", description: "Remove files used by this toolkit on this machine.", heading: true },
   { key: "repoSkills" as UninstallKey, label: "Local toolkit copy of Twilio Skills", description: "Remove the copy this toolkit uses; Setup can download it again" },
-  { key: "toolkitState" as UninstallKey, label: "Local toolkit state", description: "Remove .toolkit config, Execute MCP creds file, and Pi state" },
-  { key: "modelRuntime" as UninstallKey, label: "Local model/runtime files", description: "Remove downloaded Gemma, llamafile, whisper placeholders, logs, and temp files" },
+  { key: "toolkitState" as UninstallKey, label: "Toolkit settings and managed tools", description: "remove local settings, agent state, web UI state, and managed Node/Bun tools" },
+  { key: "modelRuntime" as UninstallKey, label: "All local AI downloads", description: "remove every downloaded model, AI runtime, log, and temporary file" },
 ];
 
 const REMOVABLE_ITEMS = UNINSTALL_ITEMS.filter((item): item is UninstallItem & { key: UninstallKey } => !item.heading);
@@ -42,7 +42,7 @@ export function buildUninstallScreen(
     route: "Dashboard / Uninstall",
     title: "Choose what to uninstall",
     subtitle: "Space toggles items. Enter reviews the selection. Escape returns to dashboard.",
-    bodyTitle: "Uninstall Items",
+    bodyTitle: "Choose items to remove",
     footer: shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "review"]),
   });
 
@@ -69,8 +69,8 @@ export function buildUninstallScreen(
     flexShrink: 0,
     visible: false,
     options: [
-      { name: "Yes - uninstall selected items", description: "Runs only the checked removals and streams output here" },
-      { name: "No - go back", description: "Return to the checklist without removing anything" },
+      { name: "Remove selected items", description: "runs only the checked removals and shows progress here" },
+      { name: "Go back", description: "return to the checklist without removing anything" },
     ],
     ...SELECT_STYLE,
   });
@@ -116,7 +116,7 @@ export function buildUninstallScreen(
     if (!selected.length) {
       confirmLabel.content = "No items selected. Choose No to go back or Escape to return.";
       confirmSelect.options = [
-        { name: "No - go back", description: "Return to the checklist" },
+        { name: "Go back", description: "return to the checklist" },
       ];
     } else {
       const labels = REMOVABLE_ITEMS
@@ -125,8 +125,8 @@ export function buildUninstallScreen(
         .join("   ");
       confirmLabel.content = `Selected: ${labels}`;
       confirmSelect.options = [
-        { name: "Yes - uninstall selected items", description: "Runs only the checked removals and streams output here" },
-        { name: "No - go back", description: "Return to the checklist without removing anything" },
+        { name: "Remove selected items", description: "runs only the checked removals and shows progress here" },
+        { name: "Go back", description: "return to the checklist without removing anything" },
       ];
     }
     warning.visible = false;

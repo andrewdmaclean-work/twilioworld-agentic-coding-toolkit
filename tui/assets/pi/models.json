@@ -6,16 +6,18 @@
       "apiKey": "local",
       "compat": {
         "supportsDeveloperRole": false,
-        "supportsReasoningEffort": true
+        "supportsReasoningEffort": false,
+        "thinkingFormat": "chat-template",
+        "chatTemplateKwargs": {
+          "enable_thinking": { "$var": "thinking.enabled" }
+        }
       },
       "models": [
         {
           "id": "gemma4-e2b",
           "name": "Gemma 4 E2B (local)",
-          "input": [
-            "text",
-            "image"
-          ],
+          "reasoning": true,
+          "input": ["text", "image"],
           "contextWindow": 49152,
           "maxTokens": 4096
         }

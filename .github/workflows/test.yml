@@ -12,8 +12,31 @@ jobs:
         with:
           submodules: recursive
 
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.3
+
       - name: Install shellcheck + jq
         run: sudo apt-get update && sudo apt-get install -y shellcheck jq
 
-      - name: Run smoke tests
-        run: ./test.sh
+      - name: Install locked dependencies
+        working-directory: tui
+        run: bun install --frozen-lockfile
+
+      - name: Check shell scripts
+        run: shellcheck toolkit test.sh uninstall.sh
+
+      - name: Typecheck
+        working-directory: tui
+        run: bun run typecheck
+
+      - name: Run tests
+        working-directory: tui
+        run: bun test
+
+      - name: Smoke-test the TUI
+        working-directory: tui
+        run: TOOLKIT_TUI_SMOKE=1 bun run src/index.ts
+
+      - name: Run repository checks
+        run: ./test.sh --no-net

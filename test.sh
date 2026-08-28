@@ -1,513 +1,63 @@
 #!/usr/bin/env bash
-#
-# test.sh — smoke tests for the TwilioWorld Agentic Coding Toolkit.
-# All logic now lives in tui/src/. No bash scripts to parse or dry-run.
-#
-#   ./test.sh           # all checks (offline-safe except --net)
-#   ./test.sh --no-net  # skip URL reachability check
-#
-# Exit 0 = all passed.
-
+# Repository-level validation for the TwilioWorld Agentic Coding Toolkit.
 set -uo pipefail
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT" || exit 1
 
-PASS=0; FAIL=0
+PASS=0
+FAIL=0
+
 check() {
-  local desc="$1"; shift
+  local description="$1"
+  shift
   if "$@" >/dev/null 2>&1; then
-    printf '  \033[32mPASS\033[0m %s\n' "$desc"; PASS=$((PASS+1))
+    printf '  \033[32mPASS\033[0m %s\n' "$description"
+    PASS=$((PASS + 1))
   else
-    printf '  \033[31mFAIL\033[0m %s\n' "$desc"; FAIL=$((FAIL+1))
+    printf '  \033[31mFAIL\033[0m %s\n' "$description"
+    FAIL=$((FAIL + 1))
   fi
 }
 
-echo "── Entry point ──"
-check "toolkit entry exists"          test -f toolkit
-check "toolkit is executable"         test -x toolkit
-check "toolkit invokes OpenTUI"       grep -q 'run src/index.ts' toolkit
-check "toolkit has doctor command"    bash -c '
-  grep -q "run_doctor" toolkit &&
-  grep -q "TwilioWorld Toolkit Doctor" toolkit &&
-  grep -q "git submodule update --init --recursive" toolkit &&
-  grep -q "model reasoning" toolkit &&
-  grep -q "project-local bun" toolkit &&
-  grep -q "project-local Node" toolkit &&
-  grep -q "toolkit-local Twilio CLI" toolkit
-'
+echo "── Entry point and repository ──"
+check "toolkit entry point is executable" test -x toolkit
+check "toolkit doctor is available" grep -q "run_doctor" toolkit
+check "Twilio Skills submodule is populated" test -f vendor/twilio-ai/skills/README.md
+check "tracked JSON files are valid" bash -c 'jq empty opencode.json toolkit.defaults.json tui/assets/pi/models.json'
+check "runtime PID files are not tracked" bash -c '! git ls-files --error-unmatch .toolkit/model-server.pid .toolkit/mcp-proxy.pid >/dev/null 2>&1'
+check "Bun lockfile is committed" test -f tui/bun.lock
 
-echo "── TypeScript project ──"
-if command -v bun >/dev/null 2>&1; then
-  check "bun install succeeds"          bash -c 'cd tui && bun install --frozen-lockfile 2>/dev/null || bun install'
-  check "tsc --noEmit passes"           bash -c 'cd tui && bunx tsc --noEmit -p tsconfig.json'
-  check "tui boots without crash"       bash -c '
-    cd tui
-    TOOLKIT_TUI_SMOKE=1 bun run src/index.ts > /tmp/tui-boot-test.log 2>&1
-    grep -q "TwilioWorld\|Skills\|Twilio CLI" /tmp/tui-boot-test.log
-  '
-  check "OpenTUI interaction tests pass" bash -c 'cd tui && bun test src/screens/ui.test.ts'
+echo "── Product boundaries ──"
+check "Docs MCP remains configured" grep -q "https://mcp.twilio.com/docs" opencode.json
+check "local AI bundle is selected by default" grep -q '"localGemma": true' toolkit.defaults.json
+check "Execute MCP is fully removed" bash -c '! rg -n "Execute MCP|executeMcp|TWILIO_MCP_CREDS|twilio-execute|@twilio-alpha/mcp" README.md opencode.json toolkit.defaults.json tui/src --glob "!*.test.ts" >/dev/null'
+check "agent installers do not pipe downloads into a shell" bash -c '! rg -n "curl[^\n]*\\|[^\n]*(bash|sh)" tui/src/lib/configure-agent.ts >/dev/null'
+check "model downloads use pinned SHA-256 digests" bash -c 'grep -q "LLAMAFILE_SHA256 = \"[a-f0-9]\\{64\\}\"" tui/src/lib/constants.ts && grep -q "digestMatches" tui/src/lib/model-install.ts'
+check "quick start uses the canonical clone URL" grep -q "github.com/andrewdmaclean-work/twilioworld-agentic-coding-toolkit" README.md
+
+echo "── Shell quality ──"
+if command -v shellcheck >/dev/null 2>&1; then
+  check "shellcheck passes" shellcheck toolkit test.sh uninstall.sh
 else
-  echo "  SKIP bun checks (bun not installed)"
+  printf '  \033[33mSKIP\033[0m shellcheck is not installed\n'
 fi
 
-echo "── Structure ──"
-check "submodule populated"           test -f vendor/twilio-ai/skills/README.md
-check ".gitignore ignores gguf"       grep -q 'models/\*.gguf' .gitignore
-check ".gitignore ignores add-on config" grep -q '.toolkit/config.json' .gitignore
-check ".gitignore ignores Pi state"   grep -q '.toolkit/pi-agent/' .gitignore
-check ".gitignore ignores toolkit-local tools" bash -c '
-  grep -q ".toolkit/toolchains/" .gitignore &&
-  grep -q ".toolkit/npm-global/" .gitignore &&
-  grep -q ".toolkit/twilio-cli-home/" .gitignore
-'
-check "opencode.json valid JSON"      bash -c 'command -v jq && jq empty opencode.json || python3 -c "import json,sys; json.load(open(\"opencode.json\"))"'
-check "opencode.json has docs MCP"    grep -q 'mcp.twilio.com/docs' opencode.json
-check "opencode.json has execute MCP" grep -q 'twilio-execute' opencode.json
-check "opencode.json has llamafile"   grep -q 'gemma4-e2b' opencode.json
-check "defaults valid JSON"           bash -c 'command -v jq && jq empty toolkit.defaults.json || python3 -c "import json,sys; json.load(open(\"toolkit.defaults.json\"))"'
-check "defaults have Gemma on, no Pi add-on" bash -c 'command -v jq && jq -e ".addons.localGemma and (.addons | has(\"builtInPi\") | not)" toolkit.defaults.json || python3 -c "import json; d=json.load(open(\"toolkit.defaults.json\")); assert d[\"addons\"][\"localGemma\"] and \"builtInPi\" not in d[\"addons\"]"'
-check "defaults use light model reasoning" bash -c 'command -v jq && jq -e ".settings.modelReasoning == \"auto\"" toolkit.defaults.json || python3 -c "import json; d=json.load(open(\"toolkit.defaults.json\")); assert d[\"settings\"][\"modelReasoning\"] == \"auto\""'
-check "builtInPi removed from config schema" bash -c '! grep -q "builtInPi" tui/src/lib/config.ts'
-check "config persists model reasoning" bash -c '
-  grep -q "ModelReasoningMode" tui/src/lib/config.ts &&
-  grep -q "settings" tui/src/lib/config.ts &&
-  grep -q "modelReasoning" tui/src/lib/config.ts &&
-  grep -q "setModelReasoningMode" tui/src/lib/config.ts
-'
-
-echo "── Library modules ──"
-check "constants.ts exists"           test -f tui/src/lib/constants.ts
-check "config.ts exists"              test -f tui/src/lib/config.ts
-check "exec.ts exists"                test -f tui/src/lib/exec.ts
-check "setup.ts exists"               test -f tui/src/lib/setup.ts
-check "configure-agent.ts exists"     test -f tui/src/lib/configure-agent.ts
-check "model.ts exists"               test -f tui/src/lib/model.ts
-check "pi.ts exists"                  test -f tui/src/lib/pi.ts
-
-echo "── Correctness checks ──"
-check "constants has GGUF_MIN_BYTES"  grep -q 'GGUF_MIN_BYTES' tui/src/lib/constants.ts
-check "constants has llamafile URL"   grep -q 'llamafile' tui/src/lib/constants.ts
-check "constants has whisperfile URL" grep -q 'WHISPERFILE_URL' tui/src/lib/constants.ts
-check "constants has GGUF URL"        grep -q 'kaggle' tui/src/lib/constants.ts
-check "setup checks prerequisites"   grep -q 'node.*git.*curl' tui/src/lib/setup.ts
-check "setup handles model download"  bash -c 'grep -q "installLocalModel" tui/src/lib/setup.ts && grep -q "GGUF_STAGING" tui/src/lib/model-install.ts'
-check "model installer is shared" bash -c '
-  grep -q "export async function installLocalModel" tui/src/lib/model-install.ts &&
-  grep -q "installLocalModel" tui/src/lib/setup.ts &&
-  grep -q "installLocalModel" tui/src/lib/actions.ts &&
-  grep -q "if (!modelOk) { onDone(false); return; }" tui/src/lib/setup.ts &&
-  ! grep -q "function curlDownloadArgs" tui/src/lib/setup.ts &&
-  ! grep -q "function curlDownloadArgs" tui/src/lib/actions.ts
-'
-check "model extraction has heartbeat" bash -c '
-  grep -q "startExtractionLogger" tui/src/lib/model-install.ts &&
-  grep -q "still working" tui/src/lib/model-install.ts
-'
-check "model wait shows Twilio AI tips" bash -c '
-  grep -q "TWILIO_AI_FACTS" tui/src/lib/twilio-facts.ts &&
-  grep -q "Twilio AI tip" tui/src/lib/model-install.ts &&
-  grep -q "facts: true" tui/src/lib/model-install.ts
-'
-check "setup explains restricted Execute MCP path" bash -c 'grep -q "Enable Execute MCP (read-only)" tui/src/lib/setup.ts && grep -q "No send, create, update, or delete permission" tui/src/lib/setup.ts'
-check "setup never prints secret to log" bash -c '! grep -q "SHOWN ONCE" tui/src/lib/setup.ts'
-check "setup has GGUF size check"     grep -q 'GGUF_MIN_BYTES' tui/src/lib/model-install.ts
-check "setup handles Windows path"    grep -q 'llamafile.exe\|win32' tui/src/lib/constants.ts
-check "configure-agent pins pi package" grep -q 'PI_AGENT_PKG' tui/src/lib/configure-agent.ts
-check "configure-agent has Pi MCP adapter" grep -q 'pi-mcp-adapter' tui/src/lib/pi.ts
-check "configure-agent has OpenCode"  grep -q 'anomalyco/tap/opencode' tui/src/lib/configure-agent.ts
-check "opencode.json never written by toolkit" bash -c '! grep -q "writeFileSync" tui/src/lib/configure-agent.ts'
-check "opencode drift uses OPENCODE_CONFIG_CONTENT" grep -q 'OPENCODE_CONFIG_CONTENT' tui/src/lib/configure-agent.ts
-check "pi.ts uses routing prompt"     grep -q 'PI_ROUTING_PROMPT\|routing-prompt' tui/src/lib/pi.ts
-check "pi.ts uses --no-skills"        grep -q '\-\-no-skills' tui/src/lib/pi.ts
-check "pi.ts uses --provider llamafile" grep -q 'llamafile' tui/src/lib/pi.ts
-check "pi.ts defaults to low thinking" grep -q '"--thinking", "low"' tui/src/lib/pi.ts
-check "pi-mcp keeps all tools behind proxy" bash -c '
-  [ "$(grep -c "directTools: false" tui/src/lib/pi-mcp.ts)" -eq 2 ] &&
-  ! grep -q "directTools: true" tui/src/lib/pi-mcp.ts
-'
-check "pi-mcp has eager lifecycle"    grep -q 'eager' tui/src/lib/pi-mcp.ts
-check "pi-mcp has execute mcp guard"  grep -q 'TWILIO_MCP_CREDS' tui/src/lib/pi-mcp.ts
-check "model.ts has server args"      grep -q 'serverArgs\|--server' tui/src/lib/model.ts
-check "model startup is observable" bash -c '
-  grep -q "MODEL_SERVER_LOG" tui/src/lib/model.ts &&
-  grep -q "modelStartupStatus" tui/src/lib/model.ts &&
-  grep -q "waitForModelServer" tui/src/lib/model.ts &&
-  grep -q "logFile" tui/src/lib/exec.ts &&
-  grep -q "logFile: MODEL_SERVER_LOG" tui/src/screens/chat.ts &&
-  grep -q "logFile: MODEL_SERVER_LOG" tui/src/index.ts &&
-  grep -q "logFile: MODEL_SERVER_LOG" tui/src/lib/pi.ts
-'
-check "model readiness waits for slow startup" bash -c '
-  grep -q "timeoutSeconds: 90" tui/src/screens/chat.ts &&
-  grep -q "timeoutSeconds: 90" tui/src/lib/pi.ts &&
-  grep -q "90s" tui/src/screens/chat.ts &&
-  grep -q "elapsed" tui/src/screens/chat.ts &&
-  grep -q "\-\-max-time" tui/src/lib/model.ts
-'
-check "model reasoning is configurable" bash -c '
-  grep -q "MODEL_REASONING" tui/src/lib/model.ts &&
-  grep -q "modelReasoningMode" tui/src/lib/model.ts &&
-  grep -q "setModelReasoningMode" tui/src/index.ts &&
-  grep -q "Response style:" tui/src/screens/model-controls.ts &&
-  grep -q "validReasoning" tui/src/lib/model.ts &&
-  grep -q "\"--reasoning\", MODEL_REASONING" tui/src/lib/model.ts &&
-  grep -q "MODEL_REASONING=on" README.md &&
-  ! grep -q "\"--reasoning-budget\", \"-1\"" tui/src/lib/model.ts
-'
-check "model cache args are compatible" bash -c '
-  grep -q "\"--cache-type-v\", \"q4_0\"" tui/src/lib/model.ts &&
-  grep -q "\"--flash-attn\", \"on\"" tui/src/lib/model.ts &&
-  grep -q "\"--parallel\", \"1\"" tui/src/lib/model.ts
-'
-check "model port is configurable end-to-end" bash -c '
-  grep -q "MODEL_SERVER_PORT" tui/src/lib/constants.ts &&
-  grep -q "MODEL_SERVER_BASE_URL" tui/src/lib/constants.ts &&
-  grep -q "MODEL_SERVER_PORT" tui/src/lib/model.ts &&
-  grep -q "MODEL_SERVER_PORT" tui/src/lib/exec.ts &&
-  grep -q "MODEL_SERVER_PORT" tui/src/screens/chat.ts &&
-  grep -q "MODEL_SERVER_BASE_URL" tui/src/lib/pi.ts &&
-  grep -q "writePiModelsConfig" tui/src/lib/pi.ts
-'
-check "local model size copy is current" bash -c '
-  grep -q "LOCAL_MODEL_SIZE_LABEL = \"3.3GB\"" tui/src/lib/constants.ts &&
-  grep -q "LOCAL_MODEL_SIZE_BYTES" tui/src/lib/model-install.ts &&
-  ! grep -RIn "2\\.5GB\\|2\\.5 GB\\|~2\\.5" README.md tui/src demo 2>/dev/null
-'
-check "llamafile runtime size copy is current" bash -c '
-  grep -q "LLAMAFILE_SIZE_LABEL = \"302MB\"" tui/src/lib/constants.ts &&
-  grep -q "LLAMAFILE_SIZE_BYTES" tui/src/lib/model-install.ts &&
-  ! grep -RIn "100MB\\|100_000_000" README.md tui/src demo 2>/dev/null
-'
-check "voice module uses whisperfile" bash -c 'grep -q "transcribeVoiceFile" tui/src/lib/voice.ts && grep -q "WHISPERFILE_DEST" tui/src/lib/voice.ts'
-check "voice uses documented whisper args" bash -c 'grep -q "\"-m\", q(WHISPER_MODEL_DEST)" tui/src/lib/voice.ts && grep -q "\"--no-prints\"" tui/src/lib/voice.ts'
-check "voice input is gated coming soon" bash -c 'grep -q "VOICE_COMING_SOON" tui/src/lib/voice.ts && grep -q "Whisper model is not bundled yet" tui/src/lib/voice.ts'
-check "setup hides unfinished voice input" bash -c '! grep -q "Voice input — coming soon" tui/src/lib/setup.ts && ! grep -q "Planned command" tui/src/lib/setup.ts'
-check "setup menu reflects completed installs" bash -c '
-  grep -q "buildAddonItems" tui/src/screens/setup.ts &&
-  grep -q "modelReady" tui/src/screens/setup.ts &&
-  grep -q "devPhoneInstalled" tui/src/screens/setup.ts &&
-  grep -q "item.done" tui/src/screens/setup.ts &&
-  grep -q "✓ DONE" tui/src/checklist.ts &&
-  grep -q "□ TODO" tui/src/checklist.ts
-'
-check "setup progress shows completed steps" bash -c '
-  grep -q "stepDone" tui/src/lib/setup.ts &&
-  [ "$(grep -c "step(\"☐ \\[" tui/src/lib/setup.ts)" -eq 6 ] &&
-  [ "$(grep -c "stepDone(\"\\[" tui/src/lib/setup.ts)" -eq 6 ] &&
-  grep -q "☐ \\[1/6\\] Checking prerequisites" tui/src/lib/setup.ts &&
-  grep -q "stepDone(\"\\[6/6\\] Twilio Skills\"" tui/src/lib/setup.ts &&
-  grep -q "line.startsWith(\"☑\")" tui/src/screens/log.ts
-'
-check "first run reuses resumable setup" bash -c '
-  ! test -f tui/src/screens/onboarding.ts &&
-  grep -q "firstRun" tui/src/screens/setup.ts &&
-  grep -q "writeConfig(current.addons, current.settings)" tui/src/screens/setup.ts &&
-  grep -q "from Settings" tui/src/screens/setup.ts
-'
-check "chat stays inside OpenTUI"     bash -c 'grep -q "buildChatScreen" tui/src/index.ts && ! grep -RIn "combinedArgs\\|chatArgs\\|--chat" tui/src 2>/dev/null'
-check "chat multiline composer sends explicitly" bash -c '
-  grep -q "TextareaRenderable" tui/src/screens/chat.ts &&
-  grep -q "isChatSendShortcut" tui/src/screens/chat.ts &&
-  grep -q "Ctrl+Enter send" tui/src/screens/chat.ts
-'
-check "chat supports tool calls"      bash -c 'grep -q "CHAT_TOOLS" tui/src/screens/chat.ts && grep -q "tool_choice" tui/src/screens/chat.ts && grep -q "runChatTool" tui/src/screens/chat.ts'
-check "chat streams model responses" bash -c '
-  grep -q "streamChatCompletion" tui/src/screens/chat.ts &&
-  grep -q "stream: true" tui/src/screens/chat.ts &&
-  grep -q "getReader" tui/src/screens/chat.ts &&
-  grep -q "Prompt processing locally" tui/src/screens/chat.ts &&
-  grep -q "first text in" tui/src/screens/chat.ts &&
-  ! grep -q "stream: false" tui/src/screens/chat.ts
-'
-check "chat disables markdown replies" bash -c 'grep -q "plainTextChatResponse" tui/src/screens/chat.ts && grep -q "plain text only" tui/src/screens/chat.ts && grep -q "Do not use Markdown" tui/src/screens/chat.ts'
-check "chat hides unfinished voice shortcut" bash -c 'grep -q "isVoiceShortcut" tui/src/screens/chat.ts && grep -q "key.ctrl" tui/src/screens/chat.ts && ! grep -q "Ctrl+R voice input is wired" tui/src/screens/chat.ts'
-check "chat transcript scroll is wired" bash -c 'grep -q "isTranscriptScrollKey" tui/src/screens/chat.ts && grep -q "transcript.handleKeyPress" tui/src/screens/chat.ts && grep -q "pageup" tui/src/screens/chat.ts'
-check "chat preserves history and supports retry" bash -c '
-  grep -q "sessionHistory" tui/src/screens/chat.ts &&
-  grep -q "sessionTranscript" tui/src/screens/chat.ts &&
-  grep -q "Ctrl+T retries" tui/src/screens/chat.ts &&
-  grep -q "promptHistoryIndex" tui/src/screens/chat.ts
-'
-check "chat can read skills"         bash -c 'grep -q "search_twilio_skills" tui/src/lib/chat-tools.ts && grep -q "read_twilio_skill" tui/src/lib/chat-tools.ts'
-check "chat skill search is cached" bash -c '
-  grep -q "skillIndex" tui/src/lib/chat-tools.ts &&
-  grep -q "getSkillIndex" tui/src/lib/chat-tools.ts &&
-  grep -q "haystack" tui/src/lib/chat-tools.ts
-'
-check "chat can use docs MCP"        bash -c 'grep -q "search_twilio_docs_mcp" tui/src/lib/chat-tools.ts && grep -q "twilio__search" tui/src/lib/chat-tools.ts && grep -q "twilio__retrieve" tui/src/lib/chat-tools.ts'
-check "index.ts has all menu items"   bash -c '
-  grep -q '"'"'chat'"'"' tui/src/index.ts &&
-  grep -q '"'"'agent'"'"' tui/src/index.ts &&
-  grep -q '"'"'devphone'"'"' tui/src/index.ts &&
-  grep -q '"'"'cli'"'"' tui/src/index.ts &&
-  grep -q '"'"'resources'"'"' tui/src/index.ts &&
-  grep -q '"'"'settings'"'"' tui/src/index.ts &&
-  grep -q '"'"'exit'"'"' tui/src/index.ts
-'
-check "signup opens TwilioWorld" bash -c '
-  grep -q "TwilioWorld" tui/src/screens/resources.ts &&
-  grep -q "https://twilio.world" tui/src/index.ts &&
-  grep -q "export function openUrl" tui/src/lib/exec.ts
-'
-check "Twilio AI Docs quick link wired" bash -c '
-  grep -q "Twilio AI Docs" tui/src/screens/resources.ts &&
-  grep -q "https://www.twilio.com/docs/ai" tui/src/index.ts
-'
-check "setup is reachable after onboarding" bash -c '
-  grep -q "buildSetupScreen" tui/src/index.ts &&
-  grep -q "Components" tui/src/screens/settings.ts &&
-  grep -q "Local AI model" tui/src/screens/settings.ts &&
-  grep -q "Dashboard / Settings" tui/src/screens/settings.ts
-'
-check "agent picker offers GitHub Copilot" grep -q "GitHub Copilot" tui/src/lib/agents.ts
-check "agent picker reports detected state" bash -c '
-  test -f tui/src/lib/agents.ts &&
-  grep -q "agentPickerOptions" tui/src/screens/agent.ts &&
-  grep -q "Twilio configured" tui/src/lib/agents.ts &&
-  grep -q "checked on launch" tui/src/lib/agents.ts
-'
-check "README links Twilio AI docs" grep -q "https://www.twilio.com/docs/ai)" README.md
-check "terminal easter egg is wired" bash -c '
-  grep -q "buildInvadersScreen" tui/src/index.ts &&
-  grep -q "Signal Invaders" tui/src/screens/invaders.ts &&
-  grep -q "screen.focusable = true" tui/src/screens/invaders.ts &&
-  grep -q "konamiSecret" tui/src/index.ts &&
-  grep -q "typedSecret = \"twilio\"" tui/src/index.ts
-'
-check "README mirrors dashboard labels" bash -c '
-  grep -q "Actions" README.md &&
-  grep -q "Resources" README.md &&
-  grep -q "Settings" README.md &&
-  grep -q "System status" README.md &&
-  grep -q "OVERVIEW" README.md &&
-  grep -q "TwilioWorld" README.md &&
-  grep -q "TwilioWorld Agentic Coding Toolkit" README.md &&
-  grep -q "twilioworld-agentic-coding-toolkit" README.md
-'
-check "uninstall available from TUI" bash -c '
-  grep -q "runUninstall" tui/src/index.ts &&
-  grep -q "runUninstall" tui/src/lib/uninstall.ts &&
-  grep -q "Uninstall" tui/src/screens/uninstall.ts
-'
-check "no dedicated Pi menu item"     bash -c '! grep -q "case \"pi\"" tui/src/index.ts'
-check "index.ts has ASCII wordmark banner" bash -c '
-  grep -q "ASCIIFontRenderable" tui/src/index.ts &&
-  grep -q "\"TwilioWorld\"" tui/src/index.ts &&
-  grep -q "font: \"tiny\"" tui/src/index.ts &&
-  grep -q "banner.visible" tui/src/index.ts
-'
-check "dashboard robot reflects state and cleans up" bash -c '
-  test -f tui/src/screens/robot-face.ts &&
-  grep -q "buildRobotFace" tui/src/index.ts &&
-  grep -q "model.running" tui/src/screens/robot-face.ts &&
-  grep -q "setInterval" tui/src/screens/robot-face.ts &&
-  grep -q "clearInterval" tui/src/screens/robot-face.ts &&
-  grep -q "robot.react" tui/src/index.ts &&
-  grep -q "disposeDashboard" tui/src/index.ts
-'
-check "agent picker has no Pi favoritism" bash -c '! grep -iq "recommended\|built-in" tui/src/screens/agent.ts'
-check "configure-agent launches Pi via lib/pi.ts" grep -q 'launchPi' tui/src/lib/configure-agent.ts
-check "configure-agent auto-installs Claude/Codex/Cursor/Copilot" bash -c '
-  grep -q "@anthropic-ai/claude-code" tui/src/lib/configure-agent.ts &&
-  grep -q "@openai/codex" tui/src/lib/configure-agent.ts &&
-  grep -q "cursor-cli" tui/src/lib/configure-agent.ts &&
-  grep -q "@github/copilot" tui/src/lib/configure-agent.ts
-'
-check "all non-Pi agents share configureStandardAgent" bash -c '
-  grep -q "async function configureStandardAgent" tui/src/lib/configure-agent.ts &&
-  [ "$(grep -c "await configureStandardAgent(" tui/src/lib/configure-agent.ts)" -eq 5 ]
-'
-check "configureStandardAgent launches every agent in a new window" bash -c '
-  grep -q "openInNewWindow(spec.bin" tui/src/lib/configure-agent.ts
-'
-check "OpenCode no longer print-only (launches like the rest)" bash -c '
-  ! grep -q "rather than.*opening a new window" tui/src/lib/configure-agent.ts
-'
-check "index uses openInNewWindow"    bash -c 'grep -q "openInNewWindow" tui/src/lib/actions.ts && grep -q "openInNewWindow" tui/src/lib/pi.ts'
-check "status refreshes immediately after actions" bash -c '
-  grep -q "function refreshStatus" tui/src/index.ts &&
-  grep -q "onDone(ok)" tui/src/index.ts &&
-  grep -q "void poll();" tui/src/index.ts
-'
-check "status reads are cached and invalidated" bash -c '
-  grep -q "STATUS_CACHE_MS" tui/src/status.ts &&
-  grep -q "statusInFlight" tui/src/status.ts &&
-  grep -q "invalidateStatusCache" tui/src/status.ts &&
-  grep -q "poll(true)" tui/src/index.ts
-'
-check "no suspend/resume left in index" bash -c '! grep -q "renderer.suspend\|renderer.resume" tui/src/index.ts'
-check "exec.ts has new-window opener" grep -q 'export function openInNewWindow' tui/src/lib/exec.ts
-check "URL opener works in GUI containers" bash -c '
-  grep -q "chromium-launch" tui/src/lib/exec.ts &&
-  grep -q "No DISPLAY found" tui/src/lib/exec.ts &&
-  grep -q "xdg-utils" demo/raspbian/Dockerfile &&
-  grep -q "xdg-utils" demo/desktop/Dockerfile
-'
-check "raspbian terminal has UTF-8 fonts" bash -c '
-  grep -q "locale-gen" demo/raspbian/Dockerfile &&
-  grep -q "en_US.UTF-8" demo/raspbian/Dockerfile &&
-  grep -q "fonts-dejavu" demo/raspbian/Dockerfile &&
-  grep -q "fonts-noto-core" demo/raspbian/Dockerfile &&
-  grep -q "fontname=DejaVu Sans Mono" demo/raspbian/Dockerfile &&
-  grep -q "export LANG=en_US.UTF-8" demo/raspbian/Dockerfile
-'
-check "shell prompts read from terminal" bash -c '
-  grep -q "/dev/tty" uninstall.sh &&
-  grep -q "\[y/n\]" uninstall.sh &&
-  ! grep -RIn "read -r -p" toolkit uninstall.sh 2>/dev/null
-'
-check "toolkit toolchains are project-local" bash -c '
-  grep -q "CONFIG_DIR=.*\\.toolkit" toolkit &&
-  grep -q "TOOLCHAINS_DIR=.*CONFIG_DIR.*/toolchains" toolkit &&
-  grep -q "BUN_INSTALL=.*TOOLCHAINS_DIR.*/bun" toolkit &&
-  grep -q "BUN_BIN=.*BUN_INSTALL.*/bin/bun" toolkit &&
-  grep -q "NODE_HOME=.*TOOLCHAINS_DIR.*/node-v22" toolkit &&
-  grep -q "NODE_BIN=.*NODE_HOME.*/bin/node" toolkit &&
-  grep -q "nodejs.org/dist" toolkit &&
-  grep -q "oven-sh/bun/releases" toolkit &&
-  ! grep -q "raw.githubusercontent.com/nvm-sh/nvm" toolkit &&
-  ! grep -q "nvm install" toolkit
-'
-check "toolkit command env isolates managed CLIs" bash -c '
-  grep -q "TOOLKIT_LOCAL_ONLY_BINS = new Set(\\[\"bun\", \"node\", \"npm\", \"npx\", \"twilio\", \"pi\"\\])" tui/src/lib/exec.ts &&
-  grep -q "TWILIO_CLI_HOME" tui/src/lib/exec.ts &&
-  grep -q "NPM_GLOBAL_PREFIX" tui/src/lib/exec.ts &&
-  grep -q "toolkitEnv" tui/src/lib/exec.ts &&
-  grep -q "twilioCliEnv" tui/src/lib/exec.ts
-'
-check "setup subprocesses cannot consume TUI input" grep -q 'stdio: \["ignore", "pipe", "pipe"\]' tui/src/lib/exec.ts
-check "streaming logs sanitize terminal progress" bash -c '
-  grep -q "stripTerminalControls" tui/src/lib/exec.ts &&
-  grep -q "latestCarriageReturnFrame" tui/src/lib/exec.ts &&
-  grep -q "streamChunk" tui/src/lib/exec.ts &&
-  grep -q "\\\\r" tui/src/lib/exec.ts &&
-  grep -q "lastLogKey" tui/src/screens/log.ts
-'
-check "confirm screens ignore carried enter" bash -c '
-  grep -q "createInputGuard" tui/src/screens/input-guard.ts &&
-  grep -q "confirmGuard.ready()" tui/src/screens/setup.ts &&
-  grep -q "confirmGuard.ready()" tui/src/screens/uninstall.ts &&
-  grep -q "setSelectedIndex(1)" tui/src/screens/setup.ts &&
-  grep -q "setSelectedIndex(selected.length ? 1 : 0)" tui/src/screens/uninstall.ts
-'
-check "route transitions ignore carried enter" bash -c '
-  grep -q "selectGuard.ready()" tui/src/screens/submenu.ts &&
-  grep -q "selectGuard.ready()" tui/src/screens/agent.ts
-'
-check "log dismissal uses explicit keys" bash -c '
-  grep -q "isDismissKey" tui/src/screens/log.ts &&
-  grep -q "\\[\\\"Enter\\\", \\\"return\\\"\\]" tui/src/screens/log.ts &&
-  grep -q "subtitle: \"\"" tui/src/screens/log.ts &&
-  grep -q "if (opts.subtitle)" tui/src/screens/chrome.ts &&
-  ! grep -q "press any key" tui/src/screens/log.ts &&
-  ! grep -q "onLog(\"Starting task" tui/src/screens/log.ts &&
-  ! grep -q "Streaming command output inside the OpenTUI session" tui/src/screens/log.ts
-'
-check "setup tasks support summary details and retry" bash -c '
-  grep -q "task-progress" tui/src/screens/log.ts &&
-  grep -q "\\[\\\"D\\\", \\\"show details\\\"\\]" tui/src/screens/log.ts &&
-  grep -q "\\[\\\"R\\\", \\\"retry\\\"\\]" tui/src/screens/log.ts &&
-  grep -q "startRun" tui/src/screens/log.ts
-'
-check "no gum references remain"      bash -c '! grep -RIn "\bgum\b" README.md uninstall.sh tui/src tui/package.json 2>/dev/null'
-check "no plain UI fallback remains"  bash -c '! grep -RIn "src/plain\|TOOLKIT_PLAIN\|--plain" toolkit tui/src tui/package.json 2>/dev/null'
-check "no legacy route purple remains" bash -c '! grep -RIn "C084FC\|3B2A52" tui/src 2>/dev/null'
-check "no legacy shell scripts remain" bash -c '! ls setup.sh configure-agent.sh start-model.sh toolkit.sh toolkit-tui.sh build-system-prompt.js 2>/dev/null | grep -q .'
-
-echo "── Security audit fixes ──"
-check "E-11 context window raised (model.ts)"      grep -q '"49152"' tui/src/lib/model.ts
-check "E-11 context window raised (pi models.json)" bash -c 'command -v jq && jq -e ".providers.llamafile.models[0].contextWindow == 49152" .pi/models.json || python3 -c "import json; d=json.load(open(\".pi/models.json\")); assert d[\"providers\"][\"llamafile\"][\"models\"][0][\"contextWindow\"] == 49152"'
-check "E-11 context window raised (opencode.json)"  bash -c 'command -v jq && jq -e ".provider.llamafile.models[\"gemma4-e2b\"].limit.context == 49152" opencode.json || python3 -c "import json; d=json.load(open(\"opencode.json\")); assert d[\"provider\"][\"llamafile\"][\"models\"][\"gemma4-e2b\"][\"limit\"][\"context\"] == 49152"'
-check "E-2/M-3 curl downloads resume + bound redirects" bash -c 'grep -q "curlDownloadArgs" tui/src/lib/model-install.ts && grep -q "\-\-max-redirs" tui/src/lib/model-install.ts && grep -q "\"-C\", \"-\"" tui/src/lib/model-install.ts'
-check "curl progress is rendered by toolkit" bash -c '
-  grep -q "\-\-no-progress-meter" tui/src/lib/model-install.ts
-'
-check "model server stop uses PID file" bash -c '
-  grep -q "MODEL_SERVER_PID" tui/src/lib/constants.ts &&
-  grep -q "pidFile" tui/src/lib/exec.ts &&
-  grep -q "killPidFile" tui/src/lib/exec.ts &&
-  grep -q "killPidFile(MODEL_SERVER_PID)" tui/src/lib/exec.ts &&
-  grep -q "pidFile: MODEL_SERVER_PID" tui/src/screens/chat.ts &&
-  grep -q "pidFile: MODEL_SERVER_PID" tui/src/lib/pi.ts &&
-  grep -q "pidFile: MODEL_SERVER_PID" tui/src/index.ts &&
-  ! grep -q "pkill.*llamafile" tui/src/lib/exec.ts
-'
-check "toolkit doctor uses current model paths" bash -c '
-  grep -q "tools/llamafile" toolkit &&
-  grep -q "models/gemma4-e2b.gguf" toolkit &&
-  ! grep -q "bin/llamafile" toolkit &&
-  ! grep -q "gemma-3-4b" toolkit
-'
-check "E-8/H-4 root guard in index.ts" grep -q 'assertNotRoot' tui/src/index.ts
-check "E-8/H-4 root guard in toolkit entry" bash -c 'grep -q "EUID" toolkit && grep -q "should not be run as root" toolkit'
-check "C-1/H-3 magic-byte check before chmod +x" grep -q 'looksLikeExecutable' tui/src/lib/model-install.ts
-check "C-2/H-1/H-2 creds written chmod 600, not printed" bash -c 'grep -q "writeFileSync(envFile" tui/src/lib/actions.ts && grep -q "0o600" tui/src/lib/actions.ts && ! grep -q "TWILIO_MCP_CREDS=\${creds}" tui/src/lib/actions.ts'
-check "full setup does not mint broad Execute MCP keys" bash -c '
-  ! grep -q "api:core:keys:create" tui/src/lib/setup.ts &&
-  ! grep -q "including sending messages" tui/src/lib/setup.ts &&
-  grep -q "Enable Execute MCP (read-only)" tui/src/lib/setup.ts
-'
-check "C-3 extraction uses mkdtemp, not predictable path" bash -c 'grep -q "mkdtempSync" tui/src/lib/model-install.ts && ! grep -q "extract_tmp" tui/src/lib/model-install.ts'
-check "C-4 creds format validated"    grep -q 'looksLikeMcpCreds' tui/src/lib/actions.ts
-check "Execute MCP restricted key has puzzle read scopes only" bash -c '
-  grep -q "/twilio/messaging/messages/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/intelligence/services/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/intelligence/transcripts/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/intelligence/transcripts/sentences/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/knowledge/knowledge-bases/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/knowledge/knowledge/read" tui/src/lib/actions.ts &&
-  grep -q "/twilio/intelligence/operators/custom/read" tui/src/lib/actions.ts &&
-  grep -q "No send, create, update, or delete permission" tui/src/lib/actions.ts &&
-  ! grep -q "/send" tui/src/lib/actions.ts &&
-  ! grep -q "/create" tui/src/lib/actions.ts &&
-  ! grep -q "/update" tui/src/lib/actions.ts &&
-  ! grep -q "/delete" tui/src/lib/actions.ts
-'
-check "M-1 PORT/CTX_SIZE validated"   grep -q 'validDigits' tui/src/lib/model.ts
-check "demo desktops avoid model/noVNC port collision" bash -c '
-  grep -q "MODEL_SERVER_PORT=8082" demo/raspbian/Dockerfile &&
-  grep -q "MODEL_SERVER_PORT=8082" demo/desktop/Dockerfile &&
-  grep -q "CTX_SIZE=8192" demo/raspbian/Dockerfile &&
-  grep -q "CTX_SIZE=8192" demo/desktop/Dockerfile
-'
-check "demo desktops include process diagnostics" bash -c '
-  grep -q "procps" demo/raspbian/Dockerfile &&
-  grep -q "iproute2" demo/raspbian/Dockerfile &&
-  grep -q "procps" demo/desktop/Dockerfile &&
-  grep -q "iproute2" demo/desktop/Dockerfile
-'
-check "raspbian noVNC binds localhost by default" grep -q '127.0.0.1:8081:8080' demo/raspbian/README.md
-check "raspbian demo defaults to Pi 5-style 8GB" bash -c '
-  grep -q "Pi 5-style (8GB / 4 cores)" demo/raspbian/README.md &&
-  grep -q "\-\-memory=8g --memory-swap=8g" demo/raspbian/README.md &&
-  grep -q "\-\-shm-size=512m" demo/raspbian/README.md &&
-  grep -q "Pi 5-style 8GB setup" demo/raspbian/Dockerfile
-'
-check "M-2 umask set in setup"        grep -q 'process.umask' tui/src/lib/setup.ts
-check "L-1 pi package version pinned" grep -q 'PI_AGENT_PKG = "@earendil-works/pi-coding-agent@' tui/src/lib/constants.ts
-
-echo "── Pi config files ──"
-check "pi mcp.json valid JSON"        bash -c 'command -v jq && jq empty .pi/mcp.json || python3 -c "import json; json.load(open(\".pi/mcp.json\"))"'
-check "pi mcp template inert"         bash -c 'command -v jq && jq -e ".mcpServers == {}" .pi/mcp.json || python3 -c "import json; assert json.load(open(\".pi/mcp.json\"))[\"mcpServers\"] == {}"'
-check "pi models.json valid JSON"     bash -c 'command -v jq && jq empty .pi/models.json || python3 -c "import json; json.load(open(\".pi/models.json\"))"'
-check "pi local model configured"     bash -c 'command -v jq && jq -e '"'"'.providers.llamafile.models[0].id == "gemma4-e2b"'"'"' .pi/models.json || python3 -c "import json; d=json.load(open(\".pi/models.json\")); assert d[\"providers\"][\"llamafile\"][\"models\"][0][\"id\"] == \"gemma4-e2b\""'
-check "routing prompt present"        grep -q 'Do not answer Twilio' .pi/routing-prompt.md
-check "routing prompt bounds MCP discovery context" bash -c '
-  grep -q "includeSchemas: false" .pi/routing-prompt.md &&
-  grep -q "Do not call.*connect" .pi/routing-prompt.md &&
-  grep -q "ListIncomingPhoneNumber" .pi/routing-prompt.md
-'
+echo "── TypeScript and OpenTUI ──"
+if command -v bun >/dev/null 2>&1; then
+  check "locked dependencies install" bash -c 'cd tui && bun install --frozen-lockfile'
+  check "TypeScript typecheck passes" bash -c 'cd tui && bun run typecheck'
+  check "unit and interaction tests pass" bash -c 'cd tui && bun test'
+  check "TUI starts and exits in smoke mode" bash -c 'cd tui && TOOLKIT_TUI_SMOKE=1 bun run src/index.ts | grep -q "TwilioWorld"'
+else
+  printf '  \033[31mFAIL\033[0m Bun is required to run TypeScript and OpenTUI checks\n'
+  FAIL=$((FAIL + 1))
+fi
 
 if [[ "${1:-}" != "--no-net" ]]; then
   echo "── Network ──"
-  check "llamafile URL resolves" bash -c '
-    url="https://github.com/mozilla-ai/llamafile/releases/download/0.10.3/llamafile-0.10.3"
-    curl -fsIL "$url" >/dev/null 2>&1
-  '
-  check "whisperfile URL resolves" bash -c '
-    url="https://github.com/mozilla-ai/llamafile/releases/download/0.10.3/whisperfile-0.10.3"
-    curl -fsIL "$url" >/dev/null 2>&1
-  '
+  check "Docs MCP is reachable" curl -fsSI --max-time 10 https://mcp.twilio.com/docs
+  check "llamafile release is reachable" curl -fsSI --max-time 10 https://github.com/mozilla-ai/llamafile/releases/download/0.10.3/llamafile-0.10.3
 fi
 
 echo

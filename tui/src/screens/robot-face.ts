@@ -2,8 +2,8 @@ import { BoxRenderable, TextRenderable, type CliRenderer } from "@opentui/core";
 import type { ToolkitStatus } from "../status.ts";
 import { THEME } from "../theme.ts";
 
-const FRAME_MS = 420;
-const REACTION_MS = 1_250;
+const FRAME_MS = 480;
+const REACTION_MS = 1_600;
 
 export type RobotReaction = "curious" | "excited" | "alert" | "thinking";
 export type RobotMode = "full" | "compact" | "hidden";
@@ -13,16 +13,15 @@ interface RobotFrame {
   color: string;
 }
 
-function baseMood(status: ToolkitStatus | null): "sleepy" | "ready" | "connected" | "working" {
-  if (!status?.model.ready) return "sleepy";
+function baseMood(status: ToolkitStatus | null): "offline" | "ready" | "working" {
+  if (!status?.model.ready) return "offline";
   if (status.model.running) return "working";
-  if (status.twilio.sid) return "connected";
   return "ready";
 }
 
 function frame(status: ToolkitStatus | null, phase: number, reaction: RobotReaction | null): RobotFrame {
   const mood = baseMood(status);
-  const pulse = ["·", "●", "•"][phase % 3];
+  const pulse = mood === "working" ? ["·", "●", "•"][phase % 3] : mood === "ready" ? "•" : "○";
   const blinking = phase > 0 && phase % 12 === 0;
   const glanceLeft = phase % 16 >= 6 && phase % 16 <= 8;
   const glanceRight = phase % 16 >= 12 && phase % 16 <= 14;
@@ -31,18 +30,14 @@ function frame(status: ToolkitStatus | null, phase: number, reaction: RobotReact
   let mouth = "   ─   ";
   let color = THEME.cyan;
 
-  if (mood === "sleepy") {
-    eyes = phase % 8 === 0 ? " ●   ● " : " ─   ─ ";
-    mouth = "   ·   ";
+  if (mood === "offline") {
+    eyes = phase > 0 && phase % 12 === 0 ? " ·   · " : " ─   ─ ";
+    mouth = "   z   ";
     color = THEME.dim2;
   } else if (mood === "working") {
     eyes = blinking ? " ─   ─ " : " ^   ^ ";
     mouth = phase % 2 === 0 ? "   ▿   " : "   ⌣   ";
     color = THEME.green;
-  } else if (mood === "connected") {
-    eyes = blinking ? " ─   ─ " : " ◉   ◉ ";
-    mouth = "   ⌣   ";
-    color = THEME.red;
   } else if (blinking) {
     eyes = " ─   ─ ";
   } else if (glanceLeft) {
@@ -71,11 +66,11 @@ function frame(status: ToolkitStatus | null, phase: number, reaction: RobotReact
 
   return {
     art: [
-      `      ${pulse}`,
-      "  ╭───┴───╮",
-      `  │${eyes}│`,
-      `  │${mouth}│`,
-      "  ╰──┬─┬──╯",
+      `       ${pulse}`,
+      "   ╭───┴───╮",
+      ` ╭─┤${eyes}├─╮`,
+      ` │ │${mouth}│ │`,
+      " ╰─┴──┬─┬──┴─╯",
     ].join("\n"),
     color,
   };
@@ -83,14 +78,16 @@ function frame(status: ToolkitStatus | null, phase: number, reaction: RobotReact
 
 function compactFrame(status: ToolkitStatus | null, phase: number, reaction: RobotReaction | null): RobotFrame {
   const mood = baseMood(status);
-  let eyes = mood === "sleepy" ? "─ ─" : mood === "working" ? "^ ^" : mood === "connected" ? "◉ ◉" : "● ●";
-  let color = mood === "sleepy" ? THEME.dim2 : mood === "working" ? THEME.green : mood === "connected" ? THEME.red : THEME.cyan;
+  const signal = mood === "working" ? ["·", "●", "•"][phase % 3] : mood === "ready" ? "•" : "○";
+  let eyes = mood === "offline" ? "─ ─" : mood === "working" ? "^ ^" : "● ●";
+  let mouth = mood === "offline" ? " z " : mood === "working" ? "⌣⌣⌣" : " ─ ";
+  let color = mood === "offline" ? THEME.dim2 : mood === "working" ? THEME.green : THEME.cyan;
   if (reaction === "curious") { eyes = "◉ ?"; color = THEME.yellow; }
-  if (reaction === "excited") { eyes = "★ ★"; color = THEME.green; }
-  if (reaction === "alert") { eyes = "! !"; color = THEME.danger; }
-  if (reaction === "thinking") { eyes = phase % 2 === 0 ? "● ·" : "· ●"; color = THEME.cyan; }
+  if (reaction === "excited") { eyes = "★ ★"; mouth = "▽▽▽"; color = THEME.green; }
+  if (reaction === "alert") { eyes = "! !"; mouth = " ─ "; color = THEME.danger; }
+  if (reaction === "thinking") { eyes = phase % 2 === 0 ? "● ·" : "· ●"; mouth = " · "; color = THEME.cyan; }
   return {
-    art: [`   ${["·", "●", "•"][phase % 3]}`, " ╭─┴─╮", ` │${eyes}│`, " ╰───╯"].join("\n"),
+    art: [`   ${signal}`, " ╭─┴─╮", `╭┤${eyes}├╮`, `╰┤${mouth}├╯`].join("\n"),
     color,
   };
 }

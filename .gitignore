@@ -15,15 +15,17 @@ tools/whisperfile.exe
 # Secrets / local env
 .env
 .env.local
-.toolkit/config.json
-.toolkit/pi-agent/
-.toolkit/toolchains/
-.toolkit/npm-global/
-.toolkit/twilio-cli-home/
-.toolkit/webui/
-.pi/auth.json
-.pi/*cache*.json
-.pi/sessions/
+.toolkit/
+
+# Local coding-agent state. Repository-owned templates live under tui/assets/.
+.agents/
+.claude/
+.codex/
+.copilot/
+.cursor/
+.opencode/
+.pi/
+.superpowers/
 
 # OS noise
 .DS_Store
@@ -31,5 +33,4 @@ models/system-prompt.txt
 
 # OpenTUI dashboard prototype (tui/) — Bun-managed
 tui/node_modules/
-tui/bun.lock
 tui/bun.lockb

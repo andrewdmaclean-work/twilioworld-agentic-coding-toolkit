@@ -4,8 +4,8 @@
 
 import { existsSync, readFileSync } from "fs";
 import { capture } from "./exec.ts";
-import { modelReasoningMode, type ModelReasoningMode } from "./config.ts";
-import { writeWebUiConfig } from "./webui-config.ts";
+import { addonEnabled, modelReasoningMode } from "./config.ts";
+import { webUiStaticAssetsReady, writeBrowserMcpBootstrap, writeWebUiConfig } from "./webui-config.ts";
 import {
   LLAMAFILE_DEST,
   MODEL_SERVER_BASE_URL,
@@ -13,6 +13,7 @@ import {
   MODEL_SERVER_PORT,
   MODEL_SERVER_URL,
   WEBUI_CONFIG_FILE,
+  WEBUI_STATIC_DIR,
 } from "./constants.ts";
 import { getSelectedModel } from "./local-models.ts";
 import { statSync } from "fs";
@@ -29,15 +30,33 @@ function validDigits(raw: string | undefined, fallback: string): string {
   return raw && /^[0-9]+$/.test(raw) ? raw : fallback;
 }
 
-function validReasoning(raw: string | undefined): ModelReasoningMode | null {
-  if (raw === "off") return "off";
-  return raw === "on" || raw === "auto" ? raw : "off";
+type LlamafileReasoningMode = "off" | "auto" | "on";
+
+function validReasoning(raw: string | undefined): LlamafileReasoningMode | null {
+  if (raw === "off" || raw === "auto" || raw === "on") return raw;
+  if (raw === "low") return "auto";
+  if (raw === "medium" || raw === "high") return "on";
+  return null;
+}
+
+export function llamafileReasoningMode(configured = modelReasoningMode()): LlamafileReasoningMode {
+  if (configured === "off") return "off";
+  return configured === "low" ? "auto" : "on";
+}
+
+/** Local models do not expose standardized effort tiers, so translate the
+ * toolkit setting into a concrete reasoning-token cap. */
+export function llamafileReasoningBudget(configured = modelReasoningMode()): string {
+  if (configured === "off") return "0";
+  if (configured === "low") return "256";
+  if (configured === "medium") return "1024";
+  return "2048";
 }
 
 export const MODEL_CTX_SIZE = validDigits(process.env.CTX_SIZE, "49152");
-export const MODEL_REASONING = process.env.MODEL_REASONING
+const MODEL_REASONING_OVERRIDE = process.env.MODEL_REASONING
   ? validReasoning(process.env.MODEL_REASONING) ?? "off"
-  : modelReasoningMode();
+  : null;
 const PORT = MODEL_SERVER_PORT;
 
 export { LLAMAFILE_DEST };
@@ -105,9 +124,12 @@ function baseModelArgs(): string[] {
     "--flash-attn", "on",
     "--cache-type-k", "q4_0",
     "--cache-type-v", "q4_0",
-    // Auto recognizes reasoning output while Pi controls effort separately.
-    // Override per run with MODEL_REASONING=off or MODEL_REASONING=on.
-    "--reasoning", MODEL_REASONING,
+    // llamafile supports off/auto/on; Pi receives the exact effort setting.
+    // Override per run with MODEL_REASONING=off, auto, or on.
+    "--reasoning", MODEL_REASONING_OVERRIDE ?? llamafileReasoningMode(),
+    "--reasoning-budget", MODEL_REASONING_OVERRIDE
+      ? MODEL_REASONING_OVERRIDE === "off" ? "0" : "-1"
+      : llamafileReasoningBudget(),
   ];
   return args;
 }
@@ -122,8 +144,10 @@ export function serverArgs(): string[] {
   // Always seed the web UI's default settings server-side: Twilio Docs MCP
   // server (via the local HTTP→HTTPS bridge) + a Twilio-aware system
   // message. llamafile's built-in mechanism — no localStorage injection.
-  writeWebUiConfig();
+  writeWebUiConfig(addonEnabled("docsMcp"), modelReasoningMode());
   args.push("--ui-config-file", WEBUI_CONFIG_FILE);
+  writeBrowserMcpBootstrap(addonEnabled("docsMcp"));
+  if (webUiStaticAssetsReady()) args.push("--path", WEBUI_STATIC_DIR);
   // CORS proxy for MCP. Upstream warning: "do not enable in untrusted
   // environments." Only binds to 127.0.0.1, so exposure is local-only.
   args.push("--ui-mcp-proxy");

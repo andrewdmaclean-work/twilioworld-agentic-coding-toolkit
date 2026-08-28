@@ -34,17 +34,17 @@ function buildAddonItems(): SetupItem[] {
   const localDone = model.runtime && model.weights;
   const devDone = devPhoneInstalled();
   return [
-    { key: "__local", label: "Ask Twilio", description: localDone ? "Done." : "Installs the private local AI model.", heading: true },
+    { key: "__local", label: "Included AI toolkit", description: "Skills + live Docs are always prepared; local chat is selected by default.", heading: true },
     {
       key: "localGemma" as AddonKey,
-      label: doneLabel(localDone, "Local AI model"),
-      description: localDone ? "Downloaded and ready." : `Required for Ask Twilio and Pi (~${getSelectedModel().sizeLabel})`,
+      label: doneLabel(localDone, "Install private local chat"),
+      description: localDone ? "Downloaded; use it in the browser or Pi." : `Browser or Pi interface; downloads about ${getSelectedModel().sizeLabel}`,
       done: localDone,
     },
-    { key: "__tools", label: "Twilio tools", description: devDone ? "Done." : "Optional local tools.", heading: true },
+    { key: "__tools", label: "Additional Twilio tools", description: devDone ? "Done." : "Installed only when selected.", heading: true },
     {
       key: "devPhone" as AddonKey,
-      label: doneLabel(devDone, "Install Dev Phone"),
+      label: doneLabel(devDone, "Install Dev Phone for SMS + voice testing"),
       description: devDone ? "Dev Phone plugin installed." : "Browser soft phone for SMS + voice",
       done: devDone,
     },
@@ -66,14 +66,14 @@ export function buildSetupScreen(
 
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "setup-screen",
-    route: opts.firstRun ? "Welcome" : "Dashboard / Settings / Components",
-    title: opts.firstRun ? "Set up your toolkit" : "Components",
+    route: opts.firstRun ? "Welcome" : "Dashboard / Settings / Features",
+    title: opts.firstRun ? "Review your setup" : "Install or repair features",
     subtitle: opts.firstRun
-      ? "Choose what you need now. You can change these choices later."
-      : "Space toggles install choices. Enter saves. Escape returns to dashboard.",
-    bodyTitle: "Choose components to install",
+      ? "AI features are selected by default. Dev Phone is an additional account-facing tool."
+      : "Choose features to install on this computer. Space toggles; Enter reviews.",
+    bodyTitle: "Features",
     footer: opts.firstRun
-      ? shortcutBar(["Esc", "use defaults"], ["Space", "toggle"], ["Enter", "continue"])
+      ? shortcutBar(["Esc", "set up later"], ["Space", "toggle"], ["Enter", "review"])
       : shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "save"]),
   });
 
@@ -81,68 +81,78 @@ export function buildSetupScreen(
   body.add(checklist.container);
 
   // Confirm panel (shown after checklist confirm)
-  const confirmLabel = new TextRenderable(renderer, { id: "confirm-label", content: "Choices saved. Run installs now?", fg: THEME.green, visible: false });
+  const confirmLabel = new TextRenderable(renderer, { id: "confirm-label", content: "Choices saved. Apply them now?", fg: THEME.green, visible: false });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "confirm-select", height: 4, flexGrow: 1, flexShrink: 0, visible: false,
     options: [
-      { name: "Install selected components", description: "Runs setup here and shows progress" },
-      { name: opts.firstRun ? "Continue without installing" : "Save choices only", description: "Install these components later from Settings" },
+      { name: "Apply now", description: "prepares Twilio knowledge and installs the selected features" },
+      { name: "Go back", description: "review the optional feature choices again" },
     ],
     ...SELECT_STYLE,
   });
   const confirmGuard = createInputGuard();
-  confirmSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index) => {
-    if (!confirmGuard.ready()) return;
+
+  function startSetup(): void {
+    const logScreen = buildLogScreen(
+      renderer, "Setup — installing",
+      (onLog, onDone) => runSetup({ onLog, onDone }),
+      () => onFinished(),
+    );
+    removeAllChildren(screen);
+    screen.add(logScreen);
+  }
+
+  function showChecklist(): void {
     confirmLabel.visible = false;
     confirmSelect.visible = false;
+    checklist.container.visible = true;
+    checklist.focus();
+  }
+
+  confirmSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index) => {
+    if (!confirmGuard.ready()) return;
     if (index === 0) {
-      // Replace screen content with a log pane and stream runSetup()
-      const logScreen = buildLogScreen(
-        renderer, "Setup — installing",
-        (onLog, onDone) => runSetup({ onLog, onDone }),
-        () => onFinished(),
-      );
-      removeAllChildren(screen);
-      screen.add(logScreen);
+      startSetup();
     } else {
-      onFinished();
+      showChecklist();
     }
   });
   confirmSelect.onKeyDown = (key) => {
     if (key.name === "escape" || key.name === "q") {
       key.preventDefault();
       key.stopPropagation();
-      onCancel();
+      showChecklist();
     }
   };
   body.add(confirmLabel);
   body.add(confirmSelect);
 
   checklist.onConfirm = (checkedKeys) => {
-    // Skills, Docs MCP, and the web-UI MCP are always-on now (no toggle) —
-    // they're wired automatically when relevant. Only localGemma and
-    // devPhone are user choices. executeMcp self-gates on creds at wire
-    // time, so it's kept off in config.
+    // Twilio Skills and Docs MCP are core capabilities,
+    // not optional installs. Only the local model and Dev Phone need a choice.
     const addons: Record<AddonKey, boolean> = {
       ...current.addons,
       twilioSkills: true,
       docsMcp: true,
-      llamaUiMcp: true,
-      executeMcp: false,
-      voiceInput: false,
     };
     for (const item of configItems) addons[item.key] = checkedKeys.includes(item.key) || Boolean(item.done);
     writeConfig(addons);
     checklist.container.visible = false;
     confirmLabel.visible = true;
     confirmSelect.visible = true;
-    confirmSelect.setSelectedIndex(1);
+    confirmSelect.setSelectedIndex(0);
     confirmSelect.focus();
     confirmGuard.arm();
   };
   checklist.onCancel = () => {
     if (opts.firstRun) {
-      writeConfig(current.addons, current.settings);
+      writeConfig({
+        ...current.addons,
+        twilioSkills: true,
+        docsMcp: true,
+        localGemma: true,
+        devPhone: false,
+      }, current.settings);
       onFinished();
       return;
     }

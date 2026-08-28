@@ -1,15 +1,17 @@
 // lib/setup.ts — setup workflow implementation (add-on picker is in the TUI).
 // Install choices are already written to config.json before this is called.
 
-import { existsSync, mkdirSync } from "fs";
+import { existsSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { capture, have, runStreaming, type LogFn } from "./exec.ts";
 import { addonEnabled } from "./config.ts";
 import { installLocalModel } from "./model-install.ts";
 import { getSelectedModel } from "./local-models.ts";
+import { installTwilioSkills } from "./skills.ts";
 import {
   NPM_GLOBAL_PREFIX,
+  PI_AGENT_PKG,
   ROOT,
   SKILLS_DIR,
   TWILIO_CLI_HOME,
@@ -29,150 +31,93 @@ export async function runSetup(opts: {
 }): Promise<void> {
   const { onLog, onDone } = opts;
 
-  // Security audit M-2: everything Setup creates from here on (.toolkit/,
-  // downloaded models/tools, the creds file) should default to
+  // Everything Setup creates from here on (.toolkit/, downloaded models/tools)
+  // should default to
   // owner-only permissions, not whatever broad umask the user's shell
   // happened to have. process.umask() is process-global but Setup is a
   // one-shot flow, so this is safe for the whole run.
   process.umask(0o077);
 
   // ── Step 1: Prerequisites ──────────────────────────────────────────
-  step("☐ [1/6] Checking prerequisites", onLog);
+  step("☐ [1/4] Check this computer", onLog);
   let missing = false;
   for (const tool of ["node", "git", "curl"]) {
     if (have(tool)) {
       const ver = capture(tool, ["--version"]).split("\n")[0];
       ok(`${tool}  ${ver}`, onLog);
     } else {
-      err(`${tool} not found — install it then re-run Setup`, onLog);
+      err(`${tool} not found — install it, then retry setup`, onLog);
       missing = true;
     }
   }
   if (missing) { onDone(false); return; }
-  stepDone("[1/6] Checking prerequisites", onLog);
+  stepDone("[1/4] Check this computer", onLog);
 
-  // ── Step 2: Twilio CLI ─────────────────────────────────────────────
-  step("☐ [2/6] Toolkit-local Twilio CLI", onLog);
-  if (have("twilio")) {
-    ok(`toolkit-local twilio CLI  ${capture("twilio", ["--version"]).split("\n")[0]}`, onLog);
-    ok(`profiles isolated under ${TWILIO_CLI_HOME}`, onLog);
-  } else if (addonEnabled("devPhone")) {
-    warn("Toolkit-local Twilio CLI not found — installing (required for Dev Phone)", onLog);
-    const res = await runStreaming("npm", ["install", "--prefix", NPM_GLOBAL_PREFIX, "-g", "twilio-cli"], { cwd: ROOT, onLog });
-    if (!res.ok) { err("twilio-cli install failed — see https://www.twilio.com/docs/twilio-cli/quickstart", onLog); onDone(false); return; }
-    ok(`Twilio CLI installed under ${NPM_GLOBAL_PREFIX}`, onLog);
-    ok(`profiles isolated under ${TWILIO_CLI_HOME}`, onLog);
-  } else {
-    warn("Toolkit-local Twilio CLI not installed — not needed for your selected choices", onLog);
-    say("   (Install it later if you want the Execute MCP or Dev Phone.)", onLog);
-  }
-  stepDone("[2/6] Toolkit-local Twilio CLI", onLog);
-
-  // ── Twilio account (optional — only needed for Execute MCP) ────────
-  let activeAccountSid = "";
-  let activeProfileName = "";
-  if (have("twilio")) {
-    try {
-      const profilesJson = capture("twilio", ["profiles:list", "-o", "json"]);
-      const profiles: Array<{ id: string; accountSid: string; active?: boolean }> =
-        profilesJson ? JSON.parse(profilesJson) : [];
-      const active = profiles.find((p) => p.active) ?? profiles[0];
-      if (active) {
-        activeAccountSid = active.accountSid ?? "";
-        activeProfileName = active.id ?? "";
-      }
-    } catch { /* ignore */ }
-
-    if (!activeAccountSid) {
-      warn("Not logged in to Twilio CLI — Execute MCP will be skipped. Run `twilio login` then re-run Setup.", onLog);
-    } else {
-      // Verify credentials
-      const check = capture("twilio", ["api:core:accounts:fetch", "--sid", activeAccountSid, "-o", "json"]);
-      if (!check || check === "[]") {
-        warn(`Credentials for '${activeProfileName}' appear stale — run \`twilio login\` then re-run Setup.`, onLog);
-        activeAccountSid = "";
-      } else {
-        ok(`Logged in as ${activeProfileName} (${activeAccountSid})`, onLog);
-      }
-    }
-  }
-
-  // ── Step 3: API key for Execute MCP ───────────────────────────────
-  step("☐ [3/6] Execute MCP API key (optional)", onLog);
-  if (!activeAccountSid) {
-    warn("Not logged in to Twilio CLI — skipping Execute MCP.", onLog);
-    say("   Use Twilio CLI → Log in, then Twilio CLI → Enable Execute MCP (read-only).", onLog);
-  } else {
-    ok("Toolkit-local Twilio CLI is logged in.", onLog);
-    say("   Setup does not create Execute MCP credentials automatically.", onLog);
-    say("   Use Twilio CLI → Enable Execute MCP (read-only) to create a restricted key.", onLog);
-    say("   Scope: Messaging logs, Conversation Intelligence, Enterprise Knowledge, Custom Operators.", onLog);
-    say("   No send, create, update, or delete permission is granted.", onLog);
-  }
-  stepDone("[3/6] Execute MCP API key (optional)", onLog);
-
-  // ── Step 4: Local model ────────────────────────────────────────────
-  step("☐ [4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
-  if (!addonEnabled("localGemma")) {
-    warn("Local Gemma not selected — skipping", onLog);
-  } else {
-    const modelOk = await installLocalModel({ model: getSelectedModel(), onLog });
-    if (!modelOk) { onDone(false); return; }
-  }
-  stepDone("[4/6] Local AI model — Gemma 4 E2B via llamafile", onLog);
-
-  // ── Step 5: Dev Phone ──────────────────────────────────────────────
-  step("☐ [5/6] Dev Phone", onLog);
-  if (!addonEnabled("devPhone")) {
-    warn("Dev Phone not selected — skipping", onLog);
-  } else if (!have("twilio")) {
-    warn("Twilio CLI not available — cannot install Dev Phone", onLog);
-  } else {
-    const plugins = capture("twilio", ["plugins"]);
-    if (plugins.includes("plugin-dev-phone")) {
-      ok("Dev Phone plugin already installed", onLog);
-    } else {
-      const res = await runStreaming("twilio", ["plugins:install", "@twilio-labs/plugin-dev-phone"], { cwd: ROOT, onLog });
-      if (res.ok) ok("Dev Phone installed", onLog);
-      else warn("Dev Phone install failed (non-fatal)", onLog);
-    }
-    warn("Dev Phone OVERWRITES a number's webhooks — use a spare number, not production.", onLog);
-  }
-  stepDone("[5/6] Dev Phone", onLog);
-
-  // ── Step 6: Skills ─────────────────────────────────────────────────
-  step("☐ [6/6] Twilio Skills", onLog);
+  // ── Step 2: Skills ─────────────────────────────────────────────────
+  step("☐ [2/4] Prepare Twilio knowledge", onLog);
   const skillsReadme = join(ROOT, "vendor", "twilio-ai", "skills", "README.md");
   if (!existsSync(skillsReadme)) {
-    say("   Pulling skills (git submodule)…", onLog);
+    say("   Downloading Twilio Skills (git submodule)…", onLog);
     const res = await runStreaming("git", ["submodule", "update", "--init", "--recursive"], { cwd: ROOT, onLog });
-    if (res.ok) ok("Skills pulled", onLog);
-    else err("Submodule init failed", onLog);
+    if (!res.ok) { err("Could not download Twilio Skills", onLog); onDone(false); return; }
   }
   let skillCount = 0;
   try {
     const countOut = capture("find", [SKILLS_DIR, "-name", "SKILL.md"]);
     skillCount = countOut.split("\n").filter(Boolean).length;
   } catch { /* ignore */ }
-  ok(`${skillCount} skills available`, onLog);
-
-  // Always install Skills globally — they're free files on the Agent
-  // Skills standard, read by every configured agent from ~/.agents/skills.
-  {
-    const globalSkills = join(homedir(), ".agents", "skills");
-    mkdirSync(globalSkills, { recursive: true });
-    const res = await runStreaming("cp", ["-r", join(SKILLS_DIR, "."), globalSkills], { cwd: ROOT, onLog });
-    if (res.ok) ok("Skills installed globally to ~/.agents/skills/", onLog);
-    else warn("Global skills copy failed — skills available in this repo only", onLog);
+  const globalSkills = join(homedir(), ".agents", "skills");
+  try {
+    installTwilioSkills(globalSkills);
+  } catch (error) {
+    err(`Could not install Twilio Skills for coding agents: ${(error as Error).message}`, onLog);
+    onDone(false);
+    return;
   }
-  stepDone("[6/6] Twilio Skills", onLog);
+  ok(`${skillCount} Twilio Skills ready; live Docs search is included`, onLog);
+  stepDone("[2/4] Prepare Twilio knowledge", onLog);
 
-  // ── Verify ─────────────────────────────────────────────────────────
-  if (activeAccountSid) {
-    const check = capture("twilio", ["api:core:accounts:fetch", "--sid", activeAccountSid, "-o", "json"]);
-    if (check && check !== "[]") ok("Twilio API reachable — credentials work", onLog);
-    else warn("Could not reach Twilio API — check your connection and run `twilio login`", onLog);
+  // ── Step 3: Local model ────────────────────────────────────────────
+  const selectedModel = getSelectedModel();
+  step(`☐ [3/4] Local AI model — ${selectedModel.name}`, onLog);
+  if (!addonEnabled("localGemma")) {
+    say("   Not selected — private local chat can be installed later from Settings", onLog);
+  } else {
+    const modelOk = await installLocalModel({ model: selectedModel, onLog });
+    if (!modelOk) { onDone(false); return; }
+    if (have("pi")) {
+      ok(`Pi already installed  ${capture("pi", ["--version"]).split("\n")[0]}`, onLog);
+    } else {
+      say("   Installing the Pi local coding interface…", onLog);
+      const pi = await runStreaming("npm", ["install", "-g", "--ignore-scripts", PI_AGENT_PKG], { cwd: ROOT, onLog });
+      if (!pi.ok) { err("Could not install Pi", onLog); onDone(false); return; }
+      ok("Pi installed", onLog);
+    }
   }
+  stepDone(`[3/4] Local AI model — ${selectedModel.name}`, onLog);
+
+  // ── Step 4: Dev Phone ──────────────────────────────────────────────
+  step("☐ [4/4] Dev Phone", onLog);
+  if (!addonEnabled("devPhone")) {
+    say("   Not selected — Dev Phone can be installed later from Settings", onLog);
+  } else {
+    if (!have("twilio")) {
+      say("   Installing the toolkit-local Twilio CLI required by Dev Phone…", onLog);
+      const cli = await runStreaming("npm", ["install", "--prefix", NPM_GLOBAL_PREFIX, "-g", "twilio-cli"], { cwd: ROOT, onLog });
+      if (!cli.ok) { err("Could not install the Twilio CLI", onLog); onDone(false); return; }
+      ok(`Twilio CLI installed; account profiles stay isolated in ${TWILIO_CLI_HOME}`, onLog);
+    }
+    const plugins = capture("twilio", ["plugins"]);
+    if (plugins.includes("plugin-dev-phone")) {
+      ok("Dev Phone plugin already installed", onLog);
+    } else {
+      const res = await runStreaming("twilio", ["plugins:install", "@twilio-labs/plugin-dev-phone"], { cwd: ROOT, onLog });
+      if (res.ok) ok("Dev Phone installed", onLog);
+      else { err("Dev Phone installation failed", onLog); onDone(false); return; }
+    }
+    warn("Dev Phone can replace a number's webhook settings. Use a spare number, not a production number.", onLog);
+  }
+  stepDone("[4/4] Dev Phone", onLog);
 
   say("", onLog);
   ok("Setup complete.", onLog);

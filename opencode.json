@@ -6,16 +6,6 @@
       "url": "https://mcp.twilio.com/docs",
       "enabled": true,
       "oauth": false
-    },
-    "twilio-execute": {
-      "type": "local",
-      "command": [
-        "npx",
-        "-y",
-        "@twilio-alpha/mcp@0.6.0",
-        "${TWILIO_MCP_CREDS}"
-      ],
-      "enabled": false
     }
   },
   "provider": {

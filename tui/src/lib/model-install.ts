@@ -1,5 +1,5 @@
 // lib/model-install.ts — shared local model installer.
-// Components and Ask Twilio both use this so download/extract behavior,
+// Setup, browser chat, and Pi use this so download/extract behavior,
 // progress logs, and failure handling cannot drift.
 
 import {
@@ -13,12 +13,15 @@ import {
   rmSync,
   statSync,
 } from "fs";
+import { createReadStream } from "fs";
+import { createHash } from "crypto";
 import { twilioFactAt } from "./twilio-facts.ts";
 import { capture, fileExecutable, runStreaming, type LogFn } from "./exec.ts";
 import {
   LLAMAFILE_DEST,
   LLAMAFILE_SIZE_BYTES,
   LLAMAFILE_SIZE_LABEL,
+  LLAMAFILE_SHA256,
   LLAMAFILE_URL,
   MODELS_DIR,
   ROOT,
@@ -84,6 +87,22 @@ function looksLikeExecutable(path: string): boolean {
   }
 }
 
+export async function sha256File(path: string): Promise<string> {
+  const hash = createHash("sha256");
+  await new Promise<void>((resolve, reject) => {
+    const stream = createReadStream(path);
+    stream.on("data", (chunk) => hash.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", resolve);
+  });
+  return hash.digest("hex");
+}
+
+async function digestMatches(path: string, expected: string): Promise<boolean> {
+  try { return (await sha256File(path)) === expected.toLowerCase(); }
+  catch { return false; }
+}
+
 function ggufSizeOk(model: LocalModel): boolean {
   if (!existsSync(model.dest)) return false;
   try { return statSync(model.dest).size >= model.minBytes; } catch { return false; }
@@ -143,6 +162,12 @@ export async function installLocalModel(opts: {
       rmSync(LLAMAFILE_DEST, { force: true });
       return false;
     }
+    say("   Verifying runtime checksum…", onLog);
+    if (!(await digestMatches(LLAMAFILE_DEST, LLAMAFILE_SHA256))) {
+      err("Runtime checksum did not match the pinned release — removing it.", onLog);
+      rmSync(LLAMAFILE_DEST, { force: true });
+      return false;
+    }
     chmodSync(LLAMAFILE_DEST, 0o755);
     ok("llamafile runtime ready", onLog);
   } else {
@@ -171,12 +196,18 @@ export async function installLocalModel(opts: {
       ok(`Partial download present (${(sz / 1_073_741_824).toFixed(1)}GB) — resuming`, onLog);
     }
 
+    say("   Verifying model checksum…", onLog);
+    if (!(await digestMatches(model.staging, model.sha256))) {
+      err("Model checksum did not match its content-addressed download — removing it.", onLog);
+      rmSync(model.staging, { force: true });
+      return false;
+    }
     renameSync(model.staging, model.dest);
     ok(`Model ready (${(statSync(model.dest).size / 1_073_741_824).toFixed(1)}GB)`, onLog);
   } else {
     ok("Model weights already present", onLog);
   }
 
-  ok("Local model ready — Ask Twilio is available.", onLog);
+  ok("Local model ready for browser chat or Pi.", onLog);
   return true;
 }

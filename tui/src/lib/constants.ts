@@ -13,7 +13,6 @@ export const ROOT = dirname(TUI_DIR); // repo root
 
 // ── Pinned versions ─────────────────────────────────────────────────
 export const LLAMAFILE_VERSION = "0.10.3";
-export const TWILIO_MCP_PKG = "@twilio-alpha/mcp@0.6.0";
 export const DOCS_MCP_URL = "https://mcp.twilio.com/docs";
 
 // Security audit L-1: this was previously installed unversioned
@@ -23,18 +22,14 @@ export const DOCS_MCP_URL = "https://mcp.twilio.com/docs";
 export const PI_AGENT_PKG = "@earendil-works/pi-coding-agent@0.80.3";
 
 // llamafile ships as a cosmopolitan/APE binary; setup.ts checks the "MZ"
-// magic bytes structurally (see looksLikeExecutable) rather than trusting
-// the download blindly. TODO(security C-1): pin a real SHA-256 once one
-// is published/verified per platform for LLAMAFILE_VERSION, and check it
-// here before chmod +x — the magic-byte check alone catches corrupted/
-// captive-portal responses but not a byte-for-byte trojanized binary
-// with a still-valid APE header.
-export const LLAMAFILE_SHA256: string | null = null;
+// magic bytes structurally and setup verifies this digest before chmod +x.
+// The Windows artifact is distinct and is not currently distributed by this
+// Bash-based toolkit, so only the supported macOS/Linux artifact is pinned.
+export const LLAMAFILE_SHA256 = "e6d4041a82ca37cee15aab62e6826d7a61c6a3ea83bca68387958970df250883";
 
 // ── Paths ────────────────────────────────────────────────────────────
 export const CONFIG_DIR = join(ROOT, ".toolkit");
 export const CONFIG_FILE = join(CONFIG_DIR, "config.json");
-export const ENV_FILE = join(CONFIG_DIR, ".env");
 export const DEFAULT_CONFIG_FILE = join(ROOT, "toolkit.defaults.json");
 export const LEGACY_DEFAULT_CONFIG_FILE = join(CONFIG_DIR, "defaults.json");
 export const TOOLCHAINS_DIR = join(CONFIG_DIR, "toolchains");
@@ -48,12 +43,11 @@ export const TWILIO_CLI_HOME = join(CONFIG_DIR, "twilio-cli-home");
 export const TOOLKIT_BIN_DIRS = [NPM_GLOBAL_BIN_DIR, BUN_BIN_DIR, NODE_BIN_DIR];
 
 export const PI_AGENT_DIR = join(CONFIG_DIR, "pi-agent");
-export const PI_MODELS_JSON = join(ROOT, ".pi", "models.json");
-export const PI_ROUTING_PROMPT = join(ROOT, ".pi", "routing-prompt.md");
+export const PI_MODELS_JSON = join(TUI_DIR, "assets", "pi", "models.json");
+export const PI_ROUTING_PROMPT = join(TUI_DIR, "assets", "pi", "routing-prompt.md");
 
 export const MODELS_DIR = join(ROOT, "models");
 export const TOOLS_DIR = join(ROOT, "tools");
-export const SYSTEM_PROMPT = join(MODELS_DIR, "system-prompt.txt");
 export const LLAMAFILE_SIZE_LABEL = "302MB";
 export const LLAMAFILE_SIZE_BYTES = 302_000_000;
 
@@ -65,15 +59,6 @@ export const LLAMAFILE_URL = isWindows
   ? `https://github.com/mozilla-ai/llamafile/releases/download/${LLAMAFILE_VERSION}/llamafile-${LLAMAFILE_VERSION}.exe`
   : `https://github.com/mozilla-ai/llamafile/releases/download/${LLAMAFILE_VERSION}/llamafile-${LLAMAFILE_VERSION}`;
 export const LLAMAFILE_DEST = join(TOOLS_DIR, isWindows ? "llamafile.exe" : "llamafile");
-export const WHISPERFILE_URL =
-  `https://github.com/mozilla-ai/llamafile/releases/download/${LLAMAFILE_VERSION}/whisperfile-${LLAMAFILE_VERSION}`;
-export const WHISPERFILE_DEST = join(TOOLS_DIR, isWindows ? "whisperfile.exe" : "whisperfile");
-export const WHISPER_MODEL_URL =
-  "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-tiny.en-q5_1.bin";
-export const WHISPER_MODEL_DEST = join(MODELS_DIR, "whisper-tiny.en-q5_1.bin");
-export const WHISPER_MODEL_STAGING = join(MODELS_DIR, "whisper-tiny.en-q5_1.download");
-export const WHISPER_MODEL_MIN_BYTES = 20_000_000;
-export const VOICE_TMP_DIR = join(MODELS_DIR, "voice");
 
 export const MODEL_SERVER_PORT = validPort(process.env.MODEL_SERVER_PORT ?? process.env.PORT, "8080");
 export const MODEL_SERVER_BASE_URL = `http://127.0.0.1:${MODEL_SERVER_PORT}`;
@@ -96,3 +81,4 @@ export const MCP_PROXY_PID    = join(CONFIG_DIR, "mcp-proxy.pid");
 // localStorage gymnastics needed. We write ui-config.json here and pass it.
 export const WEBUI_DIR         = join(CONFIG_DIR, "webui");
 export const WEBUI_CONFIG_FILE = join(WEBUI_DIR, "ui-config.json");
+export const WEBUI_STATIC_DIR  = join(WEBUI_DIR, "static");

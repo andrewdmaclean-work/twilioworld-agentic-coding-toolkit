@@ -1,527 +1,195 @@
 # TwilioWorld Agentic Coding Toolkit
 
-> ⚠️ **Experimental — in active development.** This is a demo built for the
-> 2026 Twilio Assemble series, not a supported/production toolkit. Expect
-> rough edges, breaking changes without notice, and gaps between what's
-> documented here and what's implemented. Use it to explore, not to ship.
+> Experimental toolkit for the 2026 Twilio Assemble series. It is actively
+> developed, may change without notice, and is not a supported production tool.
 
-Arm your AI coding agent with deep Twilio expertise — Skills, live Docs MCP, and
-optional real API execution — out of the box. Clone it, run one script, choose what
-to install or wire into your agent, and your agent is ready to build and run real Twilio things with no hunting
-through docs and no copying configs.
-
-**Ask Twilio with private local AI inside the TUI** — no external agent required.
-Or configure any coding agent — Pi, OpenCode, Claude Code, Cursor, Codex, GitHub
-Copilot, or your
-own — and the toolkit wires up the same Skills/Docs MCP/Execute MCP knowledge layer
-for it. No agent gets special treatment: pick whichever fits, from one menu.
-
-Twilio Skills and Twilio MCP are Public Beta Twilio surfaces. The toolkit treats
-them as install choices: Twilio Skills and the read-only Docs MCP are enabled for agent setup by default,
-while the execute-capable MCP stays off until you explicitly select it.
-
----
+Give coding agents reliable Twilio context with Twilio Skills and live,
+read-only documentation search. The toolkit also offers optional private local
+chat, Dev Phone, and an isolated Twilio CLI—all from one terminal dashboard.
 
 ## Quick start
 
 ```bash
-git clone --recursive <this-repo-url>
+git clone --recursive https://github.com/andrewdmaclean-work/twilioworld-agentic-coding-toolkit.git
 cd twilioworld-agentic-coding-toolkit
 ./toolkit
 ```
 
-> Use `--recursive` so the Twilio Skills submodule comes down with the clone.
-> Forgot it? Setup (in the menu) runs `git submodule update --init` for you.
+First run selects the AI bundle by default:
 
-If the first run behaves strangely, `./toolkit doctor` prints a read-only
-environment check: terminal/locale, required host commands, project-local
-Bun/Node/Twilio CLI paths, submodule state, write access, disk space, and
-whether the local model/runtime are already installed.
+- Twilio Skills and live Docs search
+- **Private local chat**, opened in the llamafile browser interface or Pi (about 2.5–3.3 GB)
 
-`./toolkit` is the command you use from the repo root. Arrow keys to navigate.
-The dashboard is a two-column OpenTUI app: actions on the left, status and
-selected-action details on the right.
+**Dev Phone** and its account-facing Twilio CLI are additional and remain
+unselected. You can deselect the local model during review and configure an
+existing coding agent without the large download.
 
-```text
-┌────────────────────────────────────────────────────────────────────────────┐
-│ TwilioWorld                                                    ●           │
-│ Agentic Coding Toolkit                                   ╭───┴───╮         │
-│ model ready  |  Twilio not logged in                     │ ●   ● │         │
-│ › Ask Twilio, configure an agent, or open Dev Phone.       │   ─   │        │
-│                                                          ╰──┬─┬──╯         │
-└────────────────────────────────────────────────────────────────────────────┘
+Applying the defaults installs the selected model/runtime and Pi. Opening
+**Local chat** then lets you choose the browser or terminal interface.
 
-┌─ Actions ──────────────────────┐ ┌─ System status ────────────────────────┐
-│ ▶ Ask Twilio                     │ │  ●  Model       Ready                  │
-│   Configure agent                │ │  ○  Twilio      Sign-in needed         │
-│   Dev Phone                      │ │  ●  Docs MCP    12 skills ready        │
-│   Twilio CLI                     │ └────────────────────────────────────────┘
-│   Resources                      │ ┌─ Ask Twilio ──────────────────────────┐
-│   Settings                       │ │ OVERVIEW                               │
-│   Exit                           │ └────────────────────────────────────────┘
-└─────────────────────────────────┘ └────────────────────────────────────────┘
+If anything looks wrong, run the read-only environment check:
+
+```bash
+./toolkit doctor
 ```
 
-First run opens the same resumable setup available later under **Settings →
-Components**. The fastest path is:
+## What is included
 
-1. Choose what to install (Gemma is on by default —
-   it powers in-app chat and, if you pick Pi, Pi too)
-2. Use **Ask Twilio** for private local Q&A, or **Configure
-   agent** → pick any agent (Pi included) to wire it up
+| Capability | Purpose | Twilio login needed? |
+| --- | --- | --- |
+| Twilio Skills | Product guidance, architecture, compliance, and implementation patterns | No |
+| Live Docs MCP | Current Twilio documentation and API-schema search | No |
+| Local chat | Private local model with a simple browser interface or the Pi coding agent | No |
+| Coding-agent setup | Adds Skills and Docs to Claude Code, Codex, Cursor, OpenCode, Copilot, or Pi | Agent-specific sign-in only |
+| Dev Phone | Browser soft phone for real SMS and voice testing | Yes |
+| Twilio CLI | Isolated command-line access to your Twilio account | Yes |
 
-Ask Twilio opens directly when the model is installed. Browser chat, response style,
-server stop, and model removal live under **Settings → Local AI model**.
-The robot face reflects model/account state and reacts to task progress, success,
-and failure. **TwilioWorld** and **Twilio AI Docs** have their own top-level
-**Resources** menu.
+The toolkit does not give agents authenticated access to your Twilio account.
+Live Docs search is remote but read-only and does not require credentials.
 
-Component setup, agent configuration, Ask Twilio, and model controls all run inside the
-TUI dashboard. **Pi** and **Dev Phone** are different — they're real interactive CLIs,
-so choosing them opens a brand-new terminal window and runs there. The dashboard
-keeps running in this window; nothing is suspended or handed over. Every agent —
-Pi included — is configured through the same "Configure agent" menu item; none of
-them get a dedicated menu entry or install-choice toggle of their own. Pi is the one agent
-the toolkit can fully install and launch for you (it needs a model to talk to and a
-process to start); the others are external tools you already have, so Configure
-agent prints the exact MCP-wiring command for those instead.
+## Dashboard guide
 
-Your install choices live in `.toolkit/config.json` and are local to your machine.
-If that file is removed or you reset local state, the toolkit falls back to tracked
-defaults in `toolkit.defaults.json` — local Gemma (for in-app chat) stays on. The
-local model is also detected from the actual `models/gemma4-e2b.gguf` and
-`tools/llamafile` files, so resetting `.toolkit/` does not make a downloaded model
-disappear from the menu.
+The main menu is ordered around common tasks:
 
-Toolkit-owned runtimes and CLIs are isolated under this repo. `./toolkit` installs
-and prefers `.toolkit/toolchains/bun/`, `.toolkit/toolchains/node-v22/`,
-`.toolkit/npm-global/`, and `.toolkit/twilio-cli-home/` for its own subprocesses.
-That means a system Twilio CLI, Node, Bun, or Twilio profile elsewhere on the
-machine is not used or modified by the toolkit.
+1. **Set up a coding agent** — add Twilio Skills and live Docs, then launch it
+2. **Local chat** — choose the simple browser interface or Pi
+3. **Dev Phone** — install or open the browser test phone
+4. **Twilio CLI** — install, sign in, switch account, or open an isolated terminal
+5. **Resources** — open TwilioWorld or Twilio AI documentation
+6. **Settings** — install or repair features, manage local AI, or uninstall/reset
 
----
+Every action shows a summary before potentially destructive work. Long-running
+tasks have progress, detailed output, failure recovery, and retry controls.
 
-## What's in the toolkit
+## Coding-agent setup
 
-| Tool | What it does |
+Choose **Set up a coding agent**, review the action, and continue. The toolkit
+uses package-manager installers where available, configures Twilio knowledge,
+and opens the agent in a new terminal window.
+
+| Agent | Skills | Live Docs |
+| --- | --- | --- |
+| Claude Code | Twilio developer-kit plugin | Configured automatically |
+| Codex | Agent Skills / plugin guidance | Configured automatically |
+| Cursor | Plugin guidance | Manual MCP settings shown |
+| OpenCode | `~/.agents/skills` | Included in `opencode.json` |
+| GitHub Copilot CLI | `~/.agents/skills` | Interactive `/mcp` guidance |
+| Pi | Toolkit-managed skills directory | Toolkit-managed MCP adapter |
+| Other | Open Agent Skills instructions | Standard HTTP MCP endpoint shown |
+
+Manual Docs MCP endpoint:
+
+```text
+https://mcp.twilio.com/docs
+```
+
+Manual Skills source:
+
+```text
+vendor/twilio-ai/skills/
+```
+
+## Local AI
+
+Local AI uses [llamafile](https://github.com/mozilla-ai/llamafile) and exposes an
+OpenAI-compatible endpoint on `127.0.0.1:8080` by default. Model and runtime
+downloads are checksum-verified before use.
+
+Reasoning Off is enforced in both Pi and browser requests, and at the model
+server with a zero-token reasoning budget. Low, Medium, and High use increasing
+local token budgets; showing Pi reasoning blocks is a separate presentation
+setting.
+
+Available models:
+
+| Model | Approximate size | Best fit |
+| --- | ---: | --- |
+| Gemma 4 E2B | 3.3 GB | Multimodal Twilio Q&A |
+| Phi-4-mini | 2.5 GB | Reasoning and code on smaller machines |
+
+Choose **Local chat** to open the shared model in one of two interfaces:
+
+- **Browser chat (llamafile)** — a simple built-in chat interface, preconfigured with live Twilio Docs search.
+- **Pi (terminal)** — a coding-focused interface with Twilio Skills and live Docs tools.
+
+Under **Settings → Manage local AI** you can:
+
+- choose the model shared by the browser interface and Pi;
+- disable reasoning or set its effort to Low, Medium, or High independently from whether Pi displays its reasoning blocks (browser chat only receives reasoning when effort is enabled);
+- stop the local service; or
+- remove downloaded model files.
+
+Set a different port or context size before launching:
+
+```bash
+MODEL_SERVER_PORT=8082 CTX_SIZE=32768 ./toolkit
+```
+
+## Dev Phone safety
+
+Dev Phone can replace a Twilio number's webhook settings. Use a spare test
+number, not a production number. The toolkit-local Twilio CLI and its profiles
+live inside this repository and do not modify your normal system CLI profile.
+
+## Files created locally
+
+| Data | Location |
 | --- | --- |
-| **Twilio Skills** | 48+ skill files that teach your agent which Twilio product to use, in what order, and what to avoid. |
-| **Docs MCP** | Your agent searches the live Twilio API surface (1,800+ endpoints) and pulls exact schemas. No auth. |
-| **Execute MCP** *(experimental)* | Your agent can inspect selected live Twilio APIs through a restricted, read-only API key. No send/create/update/delete permission is granted. |
-| **Gemma 4 E2B (local)** | A free, offline model via [llamafile](https://github.com/mozilla-ai/llamafile). Serves an OpenAI-compatible API on `:8080` by default — powers in-app chat and, if selected, Pi. |
-| **Twilio CLI** | The command line to all things Twilio, logged in and ready. |
-| **Dev Phone** | A browser soft phone — make/receive real SMS + voice with no physical device. |
-| **Pi** *(one of several agent options)* | [Pi](https://pi.dev) is the one agent the toolkit can fully install, wire, and launch for you — Configure agent → Pi does everything in one step. |
-| **TwilioWorld signup** | Always-visible dashboard action that opens `https://twilio.world` in your browser. |
+| Toolkit settings and process state | `.toolkit/` |
+| Managed Bun, Node, npm, and Twilio CLI | `.toolkit/toolchains/`, `.toolkit/npm-global/` |
+| Isolated Twilio CLI profiles | `.toolkit/twilio-cli-home/` |
+| Local models and logs | `models/` |
+| Local AI runtimes | `tools/llamafile*` |
+| Pi configuration | `.toolkit/pi-agent/` |
+| Globally installed Twilio Skills | `~/.agents/skills/` |
 
-### Install choices
-
-The base toolkit gives you the menu and repo-local assets. Setup groups choices
-under **Ask Twilio**, **Coding agents**, and **Twilio tools**. Those choices decide
-what gets installed locally and what gets attached when you configure an agent:
-
-| Choice | What it does | Default |
-| --- | --- | --- |
-| Local Gemma model | Required for Ask Twilio; also serves `http://127.0.0.1:8080/v1` by default for other tools (including Pi) | ✓ on |
-| Twilio Skills for agents | Installs Twilio Skills where coding agents can find them | ✓ on |
-| Docs MCP for agents | Adds searchable live Twilio API reference to configured agents | ✓ on |
-| Execute MCP for agents | Lets configured agents read selected live Twilio APIs through a restricted key | off |
-| Dev Phone | Browser SMS/voice test phone | off |
-
-There's no "which agent do I use" setup choice — that's not a machine-wide setting,
-it's a choice you make each time you open Configure agent. Skills and MCP choices
-attach to whichever agent you configure, if you selected them.
-
-Use Skills and Docs MCP together: Skills guide product choice, architecture, and
-pitfalls; Docs MCP retrieves current endpoint schemas and documentation details.
-
----
-
-## Prerequisites
-
-- **git**, **curl**, and standard archive tools (`tar`/`unzip`)
-- A **Twilio account** (only needed for Execute MCP and Dev Phone)
-- ~3.3 GB free disk if you want the local Gemma model
-
-The toolkit installs isolated toolkit-local Bun/Node toolchains, Twilio CLI,
-Dev Phone plugin, llamafile runtime, and local Gemma model files when those
-choices are selected. External coding-agent CLIs may still use their native
-installers, but toolkit-owned Node/Bun/Twilio CLI state stays in `.toolkit/`.
-
----
-
-## What the setup does
-
-1. **Prerequisites** — verifies host basics and uses project-local Bun + Node from `.toolkit/toolchains/`.
-2. **Twilio CLI** — installs a toolkit-local copy under `.toolkit/npm-global` if needed for Execute MCP or Dev Phone, then checks for an active login in `.toolkit/twilio-cli-home`.
-3. **Execute MCP key** — does not mint credentials automatically. Use **Twilio CLI → Enable Execute MCP (read-only)** to create a restricted key for Messaging logs, Conversation Intelligence, Enterprise Knowledge, and Custom Operators.
-4. **Local model** — downloads the llamafile runtime + Gemma 4 E2B weights only if selected.
-5. **Dev Phone** — installs the plugin only if selected.
-6. **Skills** — initializes the submodule and installs skills globally if the agent Skills choice is enabled.
-
-If a Twilio account is active, Setup verifies the credentials with a real API call.
-When it finishes, it returns you to the dashboard.
-
----
-
-## Per-agent setup
-
-The toolkit uses each agent's **native** install path — nothing proprietary. Each
-supported agent starts from the same place: `./toolkit` → **Configure agent** →
-pick one. For the CLI-based agents — Claude Code, Codex, Cursor, OpenCode, and
-GitHub Copilot — that step is identical: it installs the agent if it's missing,
-wires your selected Skills/MCP choices, and opens the agent in a brand-new
-terminal window. Pi is the only structural exception: it's a local agent, so
-Configure agent also starts the local Gemma model it talks to before launching.
-
-### Claude Code
+Runtime state, credentials, models, logs, and generated configuration are
+ignored by Git. Use **Settings → Uninstall or reset** to review individual
+removals, or run the standalone guided uninstaller:
 
 ```bash
-./toolkit
-# choose: Configure agent → Claude Code
+./uninstall.sh
 ```
 
-That step:
-- installs Claude Code if it isn't on PATH yet (Homebrew cask → npm → the official
-  install script, in that order)
-- adds the `twilio-developer-kit` plugin marketplace + plugin if Skills are enabled
-- adds the Docs MCP and/or Execute MCP if those choices are enabled
-- opens `claude` in a brand-new terminal window — sign in there on first run
+## Platform support
 
-**Manual equivalent**, if you'd rather do it yourself:
-```text
-brew install --cask claude-code        # or: npm install -g @anthropic-ai/claude-code
-claude plugin marketplace add https://github.com/twilio/ai
-claude plugin install twilio-developer-kit@twilio
-claude mcp add twilio-docs --transport http https://mcp.twilio.com/docs
-```
+| Platform | Status |
+| --- | --- |
+| macOS arm64/x64 | Supported; multiple terminal apps are detected |
+| Linux arm64/x64 | Supported; requires a compatible graphical terminal for new-window actions |
+| Windows | Native launch is not currently supported; WSL is not yet verified |
 
-### Codex
+Host requirements are `bash`, `git`, `curl`, and standard archive tools. The
+toolkit installs project-local Bun and Node runtimes when needed.
+
+## Development
 
 ```bash
-./toolkit
-# choose: Configure agent → Codex
+cd tui
+bun install --frozen-lockfile
+bun run typecheck
+bun test
+
+cd ..
+./test.sh --no-net
 ```
 
-That step:
-- installs Codex if it isn't on PATH yet (Homebrew → npm → the official install
-  script, in that order)
-- adds the Docs MCP and/or Execute MCP if those choices are enabled (Codex's
-  plugin marketplaces aren't auto-wired yet — see the manual step below)
-- opens `codex` in a brand-new terminal window — sign in there on first run
-
-**Manual equivalent:**
-```bash
-brew install codex                     # or: npm install -g @openai/codex
-codex mcp add twilio-docs --url https://mcp.twilio.com/docs
-# Plugins: open Codex → /plugins → install "Twilio developer kit"
-```
-
-### Cursor
-
-```bash
-./toolkit
-# choose: Configure agent → Cursor
-```
-
-That step installs the [Cursor CLI](https://cursor.com/docs/cli) (`cursor-agent`)
-if it isn't on PATH yet (Homebrew cask → the official install script), then opens
-it in a brand-new terminal window. MCP and plugin wiring for Cursor isn't
-CLI-scriptable yet, so Configure agent prints the manual steps:
-
-```text
-In Cursor Composer or the CLI:  /add-plugin twilio-developer-kit
-Add Execute MCP under Cursor Settings > MCP, or run the Execute MCP one-liner
-Configure agent prints for you.
-```
-
-### OpenCode
-
-`opencode.json` (in this repo) defines both MCP servers, committed with static
-defaults that match the toolkit's own defaults: Docs MCP on, Execute MCP off.
-This file is never modified by the toolkit — if your install choices differ
-from those defaults, Configure agent prints an `OPENCODE_CONFIG_CONTENT`
-override for you rather than rewriting the tracked file. For serious agent
-work, pick a cloud model with `/connect` inside OpenCode (Anthropic, OpenAI,
-or OpenCode Zen).
-
-> **Local Gemma E2B + tool calling:** the local model has tool calling enabled, but
-> it's a 2B edge model. It works with a *small* number of tools attached. If you point
-> it at the full Twilio **Docs MCP** (a large tool surface) it can get slow or stall.
-> For local tool use, enable only the **Execute MCP** and disable Docs MCP.
-> For heavy multi-tool agent work, use a cloud model.
-
-To enable the Execute MCP:
-
-```bash
-source .toolkit/.env   # created by Setup, chmod 600 — never printed to the log
-
-# If you enabled Execute MCP as an install choice, Configure agent will have printed
-# an override like this (opencode.json's committed default stays off):
-export OPENCODE_CONFIG_CONTENT='{"$schema":"https://opencode.ai/config.json","mcp":{"twilio-execute":{"enabled":true}}}'
-```
-
-Configure agent installs OpenCode for you (Homebrew tap → npm) if it isn't on
-PATH yet, then opens it in a brand-new terminal window — the same as every other
-CLI-based agent. OpenCode still needs a model before it's useful, so run its
-`/connect` step in that window to pick one (Anthropic, OpenAI, or OpenCode Zen).
-
-### Pi
-
-Pi is the agent the toolkit fully installs, wires, **and launches** with zero
-manual follow-up beyond that. It needs a model to talk to (local Gemma) and a
-process started, so Configure agent does all of that in one step and opens Pi in
-a brand-new terminal window:
-
-```bash
-./toolkit
-# choose: Configure agent → Pi
-```
-
-That single step:
-- installs Pi if it isn't on PATH yet
-- starts the local Gemma service if it isn't running
-- attaches your selected Skills, Docs MCP, and/or Execute MCP automatically
-- opens Pi in a brand-new terminal window — the dashboard keeps running in this one
-
-> **Requires Node ≥ 22.19.0.** Node 18/20 crash Pi. `./toolkit` installs a project-local Node under `.toolkit/toolchains/node-v22/`, and Configure agent will tell you if that local Node is missing or too old.
-
-Pi is intentionally lightweight. It is the right tool for focused Twilio tasks, quick
-questions, and iterating on code, with no API key required. For long multi-tool agent
-runs with heavy context, use a cloud-backed agent (OpenCode + Anthropic/OpenAI is the
-recommended pairing) — or just use **Ask Twilio** from the menu for quick
-Twilio Q&A without installing Pi at all.
-
-**Manual launch** (Configure agent is simpler):
-
-```bash
-# Configure agent starts the local model automatically when Pi launches.
-PI_CODING_AGENT_DIR="$PWD/.toolkit/pi-agent" \
-  pi --provider llamafile --model gemma4-e2b \
-     --append-system-prompt .pi/routing-prompt.md
-```
-
----
-
-## Bring your own agent
-
-Everything is built on open standards — [MCP](https://modelcontextprotocol.io) and
-[Agent Skills](https://agentskills.io). Any compatible agent can use the toolkit:
-
-```text
-Docs MCP (HTTP, no auth):
-    https://mcp.twilio.com/docs
-
-Execute MCP (experimental, stdio):
-    npx -y @twilio-alpha/mcp@0.6.0 "ACxxx/SKxxx:secret" --services twilio_api_v2010
-
-Skills (make them global):
-    cp -r vendor/twilio-ai/skills/ ~/.agents/skills/
-
-Local model (OpenAI-compatible):
-    http://127.0.0.1:8080/v1   (Settings → Local AI model)
-    # If 8080 is already used: MODEL_SERVER_PORT=8082 ./toolkit
-```
-
-Verified-compatible: Claude Code, Cursor, Codex, OpenCode, Pi, GitHub Copilot,
-Gemini CLI, JetBrains Junie, and 30+ more.
-
----
-
-## The local model
-
-```bash
-./toolkit                   # choose "Ask Twilio"
-MODEL_SERVER_PORT=8082 ./toolkit  # avoid a local 8080 conflict
-CTX_SIZE=65536 ./toolkit          # optional extra headroom beyond the 48K default
-MODEL_REASONING=on ./toolkit      # use deeper thinking instead of the light default
-```
-
-Powered by [llamafile](https://github.com/mozilla-ai/llamafile) (Mozilla) — a single
-executable. The TUI starts the local OpenAI-compatible server in the background and
-renders chat inside the OpenTUI dashboard, so the toolkit does not appear to exit
-when you choose **Ask Twilio**. Tools (OpenCode, Cursor, etc.) can connect
-to `http://127.0.0.1:8080/v1` at the same time, or to
-`http://127.0.0.1:$MODEL_SERVER_PORT/v1` if you override the port.
-
-### The Built-In Web UI
-
-llamafile is Mozilla's packaging of [llama.cpp](https://github.com/ggml-org/llama.cpp)'s
-server, so when the model server is running it exposes **two things on the same
-port**:
-
-| Path | What it is | Who uses it |
-| --- | --- | --- |
-| `http://127.0.0.1:8080/` | llama.cpp's built-in **web chat UI**, compiled into the llamafile binary | you, in a browser — a quick way to poke the raw model |
-| `http://127.0.0.1:8080/v1` | the **OpenAI-compatible API** | the toolkit's in-app chat, OpenCode, Cursor, Pi, etc. |
-
-The web UI itself ships inside the `tools/llamafile` binary downloaded during
-Setup — this toolkit doesn't build it. But with the MCP proxy enabled (below),
-the toolkit automatically opens the web UI in your browser and pre-configures
-it: the Twilio Docs MCP server is wired in and a Twilio-aware system message is
-set, so it behaves like a Twilio-aware assistant from the first message — no
-manual Settings navigation required. Use **Ask Twilio** in the TUI (or a
-configured agent) for the toolkit's full tool surface (Skills, status/config
-introspection); use the web UI at the model server root when you want that Twilio-aware
-assistant in a plain browser tab instead.
-
-> The web UI binds to `127.0.0.1` only — it is not exposed off your machine. If you
-> run the model server inside one of the `demo/` GUI containers, noVNC owns
-> container port 8080. Those images set `MODEL_SERVER_PORT=8082` so the two
-> services do not collide (see each `demo/*/README.md`).
-
-### Setting up the Twilio MCP server inside the web UI (experimental)
-
-llama.cpp's web UI has its own MCP client, separate from — and much more limited
-than — the toolkit's Skills/Docs MCP/Execute MCP wiring for coding agents. Two
-real constraints, straight from upstream llama.cpp:
-
-- **HTTP/SSE/WebSocket only — no stdio.** The Docs MCP (`https://mcp.twilio.com/docs`,
-  no auth) works. The **Execute MCP does not** — it launches via
-  `npx @twilio-alpha/mcp ...` over stdio, which a browser cannot spawn. Use a
-  configured agent (Configure agent → any agent) for Execute MCP instead.
-- **The bundled llamafile has no OpenSSL.** llamafile 0.10.3's CORS proxy
-  (`--ui-mcp-proxy`) can only reach `http://` targets — pointing the web UI
-  directly at `https://mcp.twilio.com/docs` fails with
-  `HTTPS requested but CPPHTTPLIB_OPENSSL_SUPPORT is not defined`. The toolkit
-  works around this with a tiny local HTTP→HTTPS bridge (see below).
-
-Open **Settings → Local AI model → Open browser chat**. The toolkit
-starts everything wired up and opens the web UI already configured — no clicking
-through Settings and no pasting URLs. Treat the local CORS proxy as experimental;
-do not enable it in untrusted environments.
-
-Under the hood, when the addon is on the toolkit:
-- passes `--ui-mcp-proxy` to enable llama.cpp's browser CORS proxy
-- writes `.toolkit/webui/ui-config.json` and passes it via
-  `--ui-config-file` — this is llamafile's built-in mechanism for seeding the
-  web UI's default settings **server-side**, so the Twilio Docs MCP server and a
-  Twilio-aware system message are present the first time the UI loads (no
-  browser `localStorage` injection)
-- starts `tools/mcp-proxy.js` — a dependency-free Node.js HTTP→HTTPS bridge on
-  `127.0.0.1:18080` that forwards to `https://mcp.twilio.com/docs`. The web UI's
-  MCP server is set to `http://127.0.0.1:18080/`, so the request path is
-  `browser → llamafile /cors-proxy (plain HTTP) → bridge → mcp.twilio.com`.
-
-The full chain (web UI → CORS proxy → bridge → Twilio) completes a real MCP
-`initialize` handshake — verified end to end.
-
-> `--ui-config-file` and `--ui-mcp-proxy` are new upstream (llama.cpp PR
-> [#18655](https://github.com/ggml-org/llama.cpp/pull/18655)) and marked
-> experimental. If a future llamafile ships with OpenSSL, the bridge becomes
-> unnecessary and the config can point straight at `https://mcp.twilio.com/docs`.
-
-The in-app chat starts the local server with reasoning disabled by default and
-supports a small safe tool surface for toolkit introspection: local status,
-install choices, and local Twilio Skill listing. It does **not** call real
-Twilio APIs from chat; use the restricted Execute MCP in a configured agent for
-read-only account inspection.
-Light thinking is enabled by default. Use `MODEL_REASONING=off ./toolkit` for
-the fastest responses or `MODEL_REASONING=on ./toolkit` for deeper reasoning.
-
-**Memory footprint:** the model runs with a 49 152-token context window and a
-quantized KV cache (`q4_0`), keeping runtime RAM around **~3-3.5 GB** (the
-quantized KV cache scales with context size, but is small relative to the
-model weights, so doubling the window doesn't double total RAM). That covers
-the full Twilio Skills system prompt plus many turns of conversation comfortably
-(a 4096-token window was tried first and reliably ran out of context within 2-3
-turns once the Skills prompt was included, and even 32 768 got tight in longer multi-tool
-Pi/agent sessions — a security/reliability audit flagged the original issue
-before the event, see "Notes & caveats" below).
-Override the context window with `CTX_SIZE=<n>` if a task needs even more room.
-
-It loads a Twilio system prompt built from the Skills index, so the local model
-answers Twilio questions with the right context. Multimodal (text + image), runs on
-a laptop. Great for quick Q&A — too small to drive a full tool-calling agent, so
-point OpenCode/Cursor at a cloud model for that.
-
----
-
-## Cheat sheet
-
-```bash
-./toolkit               # run Gemma 4 E2B locally from the menu
-./toolkit doctor        # verify project-local runtimes, paths, model, and repo state
-# From ./toolkit → Twilio CLI → Open terminal:
-twilio dev-phone        # browser soft phone — USE A SPARE NUMBER (overwrites webhooks)
-twilio --help           # explore the isolated toolkit-local CLI
-```
-
----
-
-## What this touches on your system
-
-Host-native by design — your AI agent, browser (for Dev Phone), and GPU/Metal
-acceleration all live on your machine, so the toolkit installs there rather than in a
-container. The footprint is small and fully reversible:
-
-| Added | Where | Removed by |
-| --- | --- | --- |
-| Toolkit-local Bun + Node | `.toolkit/toolchains/` | `uninstall.sh` |
-| Toolkit-local Twilio CLI | `.toolkit/npm-global/` | `uninstall.sh` |
-| Toolkit-local Twilio CLI profiles/plugins | `.toolkit/twilio-cli-home/` | `uninstall.sh` |
-| Dev Phone plugin | toolkit-local Twilio CLI plugins | `uninstall.sh` |
-| Restricted read-only API key | your Twilio account | `uninstall.sh` |
-| Skills copy | `~/.agents/skills/twilio/`, `~/.agents/skills/sendgrid/` | `uninstall.sh` |
-| Local toolkit copy of Skills | `vendor/twilio-ai/skills/` | `uninstall.sh` |
-| Local config + Execute MCP creds | `.toolkit/config.json`, `.toolkit/.env` | `uninstall.sh` |
-| llamafile + model | `tools/`, `models/` (in this repo) | `uninstall.sh` |
-
-```bash
-./toolkit              # choose Uninstall for an in-TUI checklist
-./uninstall.sh         # same cleanup from a shell, with a confirmation per item
-```
-
-The toolkit does not read or mutate your normal system Twilio CLI profile. Its
-login, profiles, cache, and plugins live under `.toolkit/twilio-cli-home/`.
-
-> Want OS-level isolation too? Run the repo inside a devcontainer/VM — but note
-> Dev Phone needs browser + port access and llamafile won't get GPU acceleration
-> in Docker on macOS, so the host-native path is recommended.
-
----
-
-## Testing
-
-```bash
-./test.sh              # static + structure + dry-run checks (no Twilio account needed)
-./test.sh --no-net     # skip URL reachability checks
-```
-
-`./test.sh` runs in CI on every push (see `.github/workflows/test.yml`). It needs
-no Twilio account — login, restricted key creation, and live API checks are
-exercised only when you use the Twilio CLI hub actions for Execute MCP or Dev
-Phone.
-
----
-
-## Notes & caveats
-
-- **Execute MCP is experimental** (Twilio Alpha). The toolkit creates a
-  restricted read-only key for selected clue surfaces only: Messaging logs,
-  Conversation Intelligence Services/Transcripts/Sentences, Enterprise
-  Knowledge Bases/Knowledge, and Custom Operators.
-- **Dev Phone overwrites a number's webhooks** — never point it at a production number.
-- **`TWILIO_MCP_CREDS`** — **Twilio CLI → Enable Execute MCP (read-only)** writes
-  it to `.toolkit/.env` (chmod 600, gitignored, never printed to the log)
-  instead of echoing it to stdout/shell history. Load it with
-  `source .toolkit/.env`.
-- Model weights plus local runtime binaries are git-ignored. Setup currently
-  downloads Gemma/llamafile only; voice runtime paths are reserved for the
-  coming-soon Whisper work.
-- **Don't run `./toolkit` as root/sudo.** It refuses to start as root (E-8/H-4)
-  so downloaded models and `.toolkit/config.json` never end up root-owned,
-  breaking subsequent normal-user runs.
-- **Downloaded binaries are structurally verified**, not just downloaded —
-  llamafile's magic bytes are checked before `chmod +x` runs, so a captive-portal
-  page or corrupted transfer gets rejected and deleted instead of executed
-  (C-1/H-3). A pinned SHA-256 check is a planned follow-up
-  (`LLAMAFILE_SHA256` in `tui/src/lib/constants.ts`) once a hash is verified
-  per platform for the pinned llamafile release.
-
----
-
-Built on [github.com/twilio/ai](https://github.com/twilio/ai) ·
-[Twilio AI docs](https://www.twilio.com/docs/ai) ·
-[Twilio MCP docs](https://www.twilio.com/docs/ai/mcp) ·
-[Twilio Skills docs](https://www.twilio.com/docs/ai/skills)
+The test suite includes OpenTUI headless interaction tests, behavior tests for
+configuration and MCP output, integrity checks, TypeScript compilation,
+ShellCheck, and a TUI smoke test. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
+development workflow and [SECURITY.md](SECURITY.md) for reporting guidance.
+
+## Troubleshooting
+
+- **The TUI will not start:** run `./toolkit doctor`.
+- **Skills are missing:** run `git submodule update --init --recursive`, then
+  apply setup again from Settings.
+- **Local AI does not start:** inspect `models/pi-server.log`, stop local AI in
+  Settings, and retry.
+- **An agent did not configure:** review the task details; the toolkit prints
+  the agent-specific manual step when its CLI has no stable configuration API.
+- **A terminal window did not open:** launch the agent or Twilio CLI manually
+  from this repository so it inherits the toolkit's local paths.
+
+Twilio Skills and Twilio MCP are Public Beta Twilio surfaces and are not covered
+by Twilio Support Terms or an SLA.

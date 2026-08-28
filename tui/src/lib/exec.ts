@@ -26,6 +26,7 @@ import { execSync } from "child_process";
 import { tmpdir } from "os";
 import { delimiter, dirname, join } from "path";
 import {
+  LLAMAFILE_DEST,
   MCP_PROXY_PID,
   MCP_PROXY_PORT,
   MCP_PROXY_SCRIPT,
@@ -349,7 +350,11 @@ export function startDaemon(
   if (logFd !== undefined) closeSync(logFd);
   if (opts.pidFile && child.pid) {
     mkdirSync(dirname(opts.pidFile), { recursive: true });
-    writeFileSync(opts.pidFile, `${child.pid}\n`, { mode: 0o600 });
+    writeFileSync(opts.pidFile, `${JSON.stringify({
+      pid: child.pid,
+      command: shCmd(resolved, args),
+      startedAt: new Date().toISOString(),
+    })}\n`, { mode: 0o600 });
   }
   child.unref();
   return child;
@@ -429,7 +434,47 @@ export function fileExecutable(path: string): boolean {
 export function killModelServer(): boolean {
   // Also stop the proxy bridge — it's always started/stopped with the server.
   killMcpProxy();
-  return killPidFile(MODEL_SERVER_PID);
+  const managed = killPidFile(MODEL_SERVER_PID, [LLAMAFILE_DEST]);
+  return managed || killLegacyModelServer();
+}
+
+/** Match only an older toolkit-owned model process. Previous releases did not
+ * always leave a PID file, so settings changes could fail to stop an already
+ * running server. Path + server mode + port keeps the fallback from touching
+ * an unrelated process that happens to use llamafile. */
+export function legacyModelCommandMatches(
+  command: string,
+  port = MODEL_SERVER_PORT,
+): boolean {
+  const escapedPort = port.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return daemonCommandMatches(command, [LLAMAFILE_DEST])
+    && /(?:^|\s)--server(?:\s|$)/.test(command)
+    && new RegExp(`(?:^|\\s)--port(?:=|\\s+)${escapedPort}(?:\\s|$)`).test(command);
+}
+
+function killLegacyModelServer(): boolean {
+  if (process.platform === "win32") return false;
+  const result = spawnSync("lsof", [
+    "-nP",
+    "-t",
+    `-iTCP:${MODEL_SERVER_PORT}`,
+    "-sTCP:LISTEN",
+  ], { encoding: "utf8" });
+  if (result.status !== 0) return false;
+
+  const pids = (result.stdout ?? "")
+    .split(/\s+/)
+    .map((raw) => Number.parseInt(raw, 10))
+    .filter((pid) => Number.isInteger(pid) && pid > 1);
+
+  for (const pid of pids) {
+    if (!legacyModelCommandMatches(runningCommand(pid))) continue;
+    try {
+      process.kill(pid, "SIGTERM");
+      return true;
+    } catch { /* try another matching listener */ }
+  }
+  return false;
 }
 
 /**
@@ -445,22 +490,55 @@ export function startMcpProxy(): void {
 }
 
 function killMcpProxy(): void {
-  killPidFile(MCP_PROXY_PID);
+  killPidFile(MCP_PROXY_PID, [MCP_PROXY_SCRIPT]);
 }
 
-function pidFromFile(pidFile: string): number | null {
+interface DaemonPidRecord {
+  pid: number;
+  command: string;
+}
+
+function pidFromFile(pidFile: string): DaemonPidRecord | null {
   try {
-    const pid = Number.parseInt(readFileSync(pidFile, "utf8").trim(), 10);
-    return Number.isInteger(pid) && pid > 1 ? pid : null;
+    const raw = readFileSync(pidFile, "utf8").trim();
+    if (raw.startsWith("{")) {
+      const parsed = JSON.parse(raw) as Partial<DaemonPidRecord>;
+      return Number.isInteger(parsed.pid) && Number(parsed.pid) > 1
+        ? { pid: Number(parsed.pid), command: typeof parsed.command === "string" ? parsed.command : "" }
+        : null;
+    }
+    const pid = Number.parseInt(raw, 10);
+    return Number.isInteger(pid) && pid > 1 ? { pid, command: "" } : null;
   } catch {
     return null;
   }
 }
 
-function killPidFile(pidFile: string): boolean {
-  const pid = pidFromFile(pidFile);
-  if (!pid) return false;
+export function daemonCommandMatches(command: string, expectedCommands: string[]): boolean {
+  return expectedCommands.some((expected) => command.includes(expected));
+}
+
+function runningCommand(pid: number): string {
+  if (process.platform === "win32") return "";
+  const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
+  return result.status === 0 ? (result.stdout ?? "").trim() : "";
+}
+
+function killPidFile(pidFile: string, expectedCommands: string[]): boolean {
+  const record = pidFromFile(pidFile);
+  if (!record) { rmSync(pidFile, { force: true }); return false; }
+  const { pid } = record;
   try {
+    if (process.platform !== "win32") {
+      const actual = runningCommand(pid);
+      if (!actual || !daemonCommandMatches(actual, expectedCommands)) {
+        rmSync(pidFile, { force: true });
+        return false;
+      }
+    } else if (record.command && !daemonCommandMatches(record.command, expectedCommands)) {
+      rmSync(pidFile, { force: true });
+      return false;
+    }
     if (process.platform === "win32") {
       const res = spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
       rmSync(pidFile, { force: true });
@@ -486,6 +564,17 @@ function killPidFile(pidFile: string): boolean {
  * llamafile's --ui-config-file (see serverArgs() in model.ts), so there's
  * nothing to inject client-side — just open the page.
  */
+export function llamaWebUiUrl(
+  port = Number(MODEL_SERVER_PORT),
+  reloadId = Date.now(),
+): string {
+  // A unique URL forces an already-open browser tab to reload. This matters
+  // because Local Chat refreshes the MCP bridge immediately before opening;
+  // merely focusing the old tab leaves its disconnected MCP client in memory
+  // and the model then prints tool-call markup instead of executing the tool.
+  return `http://127.0.0.1:${port}/?new_chat=true&toolkit_reload=${reloadId}#/`;
+}
+
 export function openLlamaWebUi(port = Number(MODEL_SERVER_PORT)): NewWindowResult {
-  return openUrl(`http://127.0.0.1:${port}/`);
+  return openUrl(llamaWebUiUrl(port));
 }

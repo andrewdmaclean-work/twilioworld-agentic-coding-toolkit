@@ -3,13 +3,11 @@
   "addons": {
     "twilioSkills": true,
     "docsMcp": true,
-    "executeMcp": false,
     "devPhone": false,
-    "localGemma": true,
-    "voiceInput": false,
-    "llamaUiMcp": true
+    "localGemma": true
   },
   "settings": {
-    "modelReasoning": "auto"
+    "modelReasoning": "off",
+    "showThinking": false
   }
 }

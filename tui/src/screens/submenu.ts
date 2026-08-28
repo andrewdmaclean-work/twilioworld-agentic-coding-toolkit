@@ -59,7 +59,16 @@ export function buildSubmenuScreen(
     const choice = opts.options[idx];
     if (!choice) return;
     const done = choice.onSelect();
-    if (done) onCancel();
+    if (done) {
+      onCancel();
+      return;
+    }
+
+    // A submenu action may update its own label (for example, a setting that
+    // cycles through values). Re-read the options so the change is visible
+    // immediately while preserving the current selection.
+    select.options = opts.options.map((o, i) => ({ name: o.name, description: o.description, value: String(i) }));
+    select.setSelectedIndex(idx);
   });
 
   select.onKeyDown = (key) => {

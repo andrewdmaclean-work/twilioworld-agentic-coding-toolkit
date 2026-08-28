@@ -45,6 +45,13 @@ doctor_info() {
   fi
 }
 
+locale_is_utf8() {
+  case "${LC_ALL:-${LANG:-}}" in
+    *UTF-8*|*utf8*|*UTF8*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
 run_doctor() {
   local fail=0
   echo "TwilioWorld Toolkit Doctor"
@@ -56,7 +63,7 @@ run_doctor() {
   echo
 
   doctor_check "interactive terminal" test -t 0 || fail=1
-  doctor_check "UTF-8 locale" bash -c 'case "${LC_ALL:-${LANG:-}}" in *UTF-8*|*utf8*|*UTF8*) exit 0 ;; *) exit 1 ;; esac' || fail=1
+  doctor_check "UTF-8 locale" locale_is_utf8 || fail=1
   doctor_check "git on PATH" command -v git || fail=1
   doctor_check "curl on PATH" command -v curl || fail=1
   doctor_check "project-local bun" test -x "$BUN_BIN" || fail=1
@@ -92,8 +99,6 @@ run_doctor() {
 
 open_in_terminal() {
   local app="$1"
-  local toolkit_path
-  toolkit_path="$(printf '%q' "$ROOT/toolkit")"
 
   case "$app" in
     iTerm)
