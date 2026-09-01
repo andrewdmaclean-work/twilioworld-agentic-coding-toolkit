@@ -73,7 +73,7 @@ export function buildSetupScreen(
       : "Choose features to install on this computer. Space toggles; Enter reviews.",
     bodyTitle: "Features",
     footer: opts.firstRun
-      ? shortcutBar(["Esc", "set up later"], ["Space", "toggle"], ["Enter", "review"])
+      ? shortcutBar(["Esc", "use defaults"], ["Space", "toggle"], ["Enter", "review"])
       : shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "save"]),
   });
 
