@@ -14,7 +14,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
-import { shortcutBar } from "../ui-style.ts";
+import { shortcutBar, wrapText } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
@@ -41,26 +41,6 @@ function colorFor(line: string, stream: "stdout" | "stderr"): string {
   return THEME.silver;
 }
 
-function wrapText(text: string, width: number): string {
-  if (width <= 0) return text;
-  const out: string[] = [];
-  for (const raw of text.split("\n")) {
-    if (!raw) {
-      out.push("");
-      continue;
-    }
-    let line = raw;
-    while (line.length > width) {
-      let cut = line.lastIndexOf(" ", width);
-      if (cut < Math.max(12, Math.floor(width * 0.4))) cut = width;
-      out.push(line.slice(0, cut).trimEnd());
-      line = line.slice(cut).trimStart();
-    }
-    out.push(line);
-  }
-  return out.join("\n");
-}
-
 export function buildLogScreen(
   renderer: CliRenderer,
   title: string,
@@ -74,13 +54,13 @@ export function buildLogScreen(
     successAction?: () => string | undefined;
   } = {},
 ): BoxRenderable {
-  const successFooter = () => shortcutBar(["D", "details"], ["Enter", opts.successAction?.() ?? "return"]);
+  const successFooter = () => shortcutBar(["Enter", opts.successAction?.() ?? "return"], ["D", "details"]);
   const { screen, body, footer } = buildEmbeddedRouteChrome(renderer, {
     id: "log-screen",
-    route: "Dashboard / Task Log",
+    route: "Dashboard / Task log",
     title,
     subtitle: "",
-    bodyTitle: "Live Output",
+    bodyTitle: "Live output",
     footer: shortcutBar(["D", "details"]),
   });
 

@@ -17,7 +17,7 @@ export function buildResourcesScreen(
     bodyTitle: "Resources",
     options: [
       { name: "TwilioWorld", description: "open twilio.world in your browser", onSelect: () => { opts.onTwilioWorld(); return true; } },
-      { name: "Twilio AI Docs", description: "open twilio.com/docs/ai in your browser", onSelect: () => { opts.onDocs(); return true; } },
+      { name: "Twilio AI docs", description: "open twilio.com/docs/ai in your browser", onSelect: () => { opts.onDocs(); return true; } },
     ],
   }, opts.onCancel);
 }

@@ -26,7 +26,7 @@ export interface LaunchTarget {
   args?: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
-  /** First-run note shown before opening, e.g. "sign in if it's your first run". */
+  /** First-run note printed when it opens, e.g. "sign in when prompted." */
   hint?: string;
   /** How to get back when opened in this terminal, e.g. "Ctrl+C stops Dev Phone". */
   exitHint?: string;

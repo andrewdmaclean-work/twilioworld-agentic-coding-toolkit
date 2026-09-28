@@ -12,7 +12,7 @@ import { getSelectedModel } from "./local-models.ts";
 import { NPM_GLOBAL_PREFIX, ROOT, TWILIO_CLI_HOME } from "./constants.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }

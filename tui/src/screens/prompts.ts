@@ -36,7 +36,7 @@ export function buildQuitScreen(
     id: "quit-screen",
     route: "Dashboard / Quit",
     title: "Local AI is still running",
-    subtitle: `${opts.modelName} is using memory and port ${opts.port}. Escape returns to the dashboard.`,
+    subtitle: `${opts.modelName} is using memory and port ${opts.port}.`,
     bodyTitle: "Before you go",
     options: [
       {

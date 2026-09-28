@@ -40,7 +40,7 @@ export function buildSubmenuScreen(
     title: opts.title,
     subtitle: opts.subtitle,
     bodyTitle: opts.bodyTitle,
-    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    footer: shortcutBar(["Enter", "select"], ["Esc", "back"]),
   });
 
   const select = new SelectRenderable(renderer, {

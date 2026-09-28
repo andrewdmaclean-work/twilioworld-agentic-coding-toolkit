@@ -14,7 +14,7 @@ import type { ToolkitStatus } from "./status.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
 import { buildInvadersScreen } from "./screens/invaders.ts";
 import { THEME } from "./theme.ts";
-import { SELECT_STYLE, shortcutBar } from "./ui-style.ts";
+import { SELECT_STYLE, shortcutBar, wrapText } from "./ui-style.ts";
 import { detailFor, headlineText, nextMove, statusLines, visibleItems, type ItemId, type MenuItem } from "./dashboard-content.ts";
 
 const RED      = THEME.red;
@@ -32,26 +32,6 @@ export function clip(text: string, width: number): string {
   if (width <= 0) return "";
   if (text.length <= width) return text;
   return width <= 1 ? text.slice(0, width) : `${text.slice(0, width - 1)}…`;
-}
-
-function wrapText(text: string, width: number): string {
-  if (width <= 0) return text;
-  const out: string[] = [];
-  for (const raw of text.split("\n")) {
-    if (!raw) {
-      out.push("");
-      continue;
-    }
-    let line = raw;
-    while (line.length > width) {
-      let cut = line.lastIndexOf(" ", width);
-      if (cut < Math.max(12, Math.floor(width * 0.4))) cut = width;
-      out.push(line.slice(0, cut).trimEnd());
-      line = line.slice(cut).trimStart();
-    }
-    out.push(line);
-  }
-  return out.join("\n");
 }
 
 export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {

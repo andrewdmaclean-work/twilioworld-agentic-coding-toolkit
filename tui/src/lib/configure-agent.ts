@@ -16,7 +16,7 @@ import {
 } from "./agent-wiring.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 
@@ -73,7 +73,7 @@ interface AgentSpec {
   install: { brew?: string[]; npm?: string[] };
   /** Docs link shown if every install method fails. */
   docsUrl: string;
-  /** First-run note shown on the handoff screen (e.g. sign in / login). */
+  /** First-run note printed when the agent opens (e.g. sign in). */
   firstRunHint: string;
   /** Wire Twilio Skills into this agent (best-effort; may just print steps). */
   wireSkills?: (onLog: LogFn) => Promise<void> | void;
@@ -123,10 +123,10 @@ async function configureStandardAgent(
     if (!installAgentSkills(onLog)) { onDone(false); return; }
     await spec.wireSkills?.(onLog);
   }
-  else say("   Twilio Skills are disabled; skipping.", onLog);
+  else say("  Twilio Skills are disabled; skipping.", onLog);
   if (spec.syncCapabilities) await spec.syncCapabilities(capabilities, onLog);
   else if (capabilities.docs) await spec.wireDocsMcp?.(onLog);
-  else say("   Live Docs search is disabled; skipping.", onLog);
+  else say("  Live Docs search is disabled; skipping.", onLog);
 
   // 4. Ready — hand the launch back to the caller.
   say("", onLog);

@@ -19,7 +19,7 @@ import { installTwilioSkills } from "./skills.ts";
 import { pidFileAlive } from "./daemons.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
@@ -43,7 +43,7 @@ export async function ensureSkillsSource(opts: { onLog: LogFn; onDone?: (ok: boo
     onDone?.(true);
     return true;
   }
-  say("   Downloading Twilio Skills (git submodule)…", onLog);
+  say("  Downloading Twilio Skills (git submodule)…", onLog);
   if (!have("git")) {
     err("git is required to download Twilio Skills. Install git, then retry.", onLog);
     onDone?.(false);
@@ -85,7 +85,7 @@ export async function runRepair(opts: { onLog: LogFn; onDone: (ok: boolean) => v
         attention++;
       }
     } else {
-      say(`   Coding-agent Skills are added to ${AGENT_SKILLS_DIR.replace(homedir(), "~")} when you set up an agent.`, onLog);
+      say(`  Coding-agent Skills are added to ${AGENT_SKILLS_DIR.replace(homedir(), "~")} when you set up an agent.`, onLog);
     }
   }
   // Any HTTP response counts as reachable; curl reports 000 when nothing answered.
@@ -95,16 +95,16 @@ export async function runRepair(opts: { onLog: LogFn; onDone: (ok: boolean) => v
 
   step("[2/3] Local AI", onLog);
   if (!existsSync(LLAMAFILE_DEST)) {
-    say("   Not installed. It installs from Local chat when you first open it.", onLog);
+    say("  Not installed. It installs from Local chat when you first open it.", onLog);
   } else {
-    say("   Verifying llamafile runtime checksum…", onLog);
+    say("  Verifying llamafile runtime checksum…", onLog);
     if (await digestMatches(LLAMAFILE_DEST, LLAMAFILE_SHA256)) ok("llamafile runtime verified", onLog);
     else { err("llamafile runtime failed its checksum. Remove local AI from Local chat → Local AI settings, then open Local chat again.", onLog); attention++; }
 
     const installed = LOCAL_MODELS.filter((m) => existsSync(m.dest));
-    if (!installed.length) say("   No model downloaded yet. Choose one when you open Local chat.", onLog);
+    if (!installed.length) say("  No model downloaded yet. Choose one when you open Local chat.", onLog);
     for (const model of installed) {
-      say(`   Verifying ${model.name} checksum (a few seconds)…`, onLog);
+      say(`  Verifying ${model.name} checksum (a few seconds)…`, onLog);
       if (await digestMatches(model.dest, model.sha256)) ok(`${model.name} verified${model.slug === getSelectedModel().slug ? " (selected)" : ""}`, onLog);
       else { err(`${model.name} failed its checksum. Remove it from Local chat → Local AI settings, then download it again.`, onLog); attention++; }
     }
@@ -124,13 +124,13 @@ export async function runRepair(opts: { onLog: LogFn; onDone: (ok: boolean) => v
   step("[3/3] Tools", onLog);
   const version = (bin: string, args = ["--version"]) => capture(bin, args).split("\n")[0];
   if (have("pi")) ok(`Pi ${version("pi")}`, onLog);
-  else say("   Pi: not installed. It installs when you open Pi from Local chat.", onLog);
+  else say("  Pi: not installed. It installs when you open Pi from Local chat.", onLog);
   if (have("twilio")) {
     ok(`Twilio CLI ${version("twilio").replace(/^twilio-cli\//, "")}`, onLog);
     if (capture("twilio", ["plugins"]).includes("plugin-dev-phone")) ok("Dev Phone plugin installed", onLog);
-    else say("   Dev Phone: not installed. It installs when you open Dev Phone.", onLog);
+    else say("  Dev Phone: not installed. It installs when you open Dev Phone.", onLog);
   } else {
-    say("   Twilio CLI: not installed. It installs when you open the Twilio CLI or Dev Phone.", onLog);
+    say("  Twilio CLI: not installed. It installs when you open the Twilio CLI or Dev Phone.", onLog);
   }
 
   say("", onLog);

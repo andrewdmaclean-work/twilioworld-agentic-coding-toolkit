@@ -20,7 +20,7 @@ import { DOCS_MCP_URL, SKILLS_DIR } from "./constants.ts";
 import { installTwilioSkills } from "./skills.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 
@@ -142,7 +142,7 @@ export async function claudeSkills(onLog: LogFn): Promise<boolean> {
     ok("Claude Code: Twilio developer kit plugin already installed", onLog);
     return true;
   }
-  say("   Claude Code: installing the Twilio developer kit plugin…", onLog);
+  say("  Claude Code: installing the Twilio developer kit plugin…", onLog);
   if (!capture("claude", ["plugin", "marketplace", "list"], undefined, { timeoutMs: 15000 }).match(/^\s*❯?\s*twilio\s*$/m)) {
     // If the marketplace turns out to be registered already, the install below still works.
     await run("claude", ["plugin", "marketplace", "add", "https://github.com/twilio/ai"], onLog);

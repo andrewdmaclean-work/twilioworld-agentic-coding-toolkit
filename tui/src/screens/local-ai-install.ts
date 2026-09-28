@@ -57,7 +57,7 @@ export function buildLocalAiInstallScreen(
 
   const options = [
     ...LOCAL_MODELS.map((model) => ({
-      name: `${model.name}${model.slug === DEFAULT_MODEL_SLUG ? "  (recommended)" : ""}`,
+      name: `${model.name}${model.slug === DEFAULT_MODEL_SLUG ? " (recommended)" : ""}`,
       description: opts.installedSlugs.includes(model.slug)
         ? `${model.description} · already downloaded, opens right away`
         : model.description,

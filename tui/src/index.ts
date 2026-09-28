@@ -126,10 +126,6 @@ function nextModelReasoningMode(mode: ModelReasoningMode): ModelReasoningMode {
   return "off";
 }
 
-function doneLabel(done: boolean, label: string): string {
-  return done ? `✓ ${label}` : label;
-}
-
 // ── Main ─────────────────────────────────────────────────────────────
 async function main() {
   assertInteractiveTerminal();
@@ -269,6 +265,7 @@ async function main() {
     forceTerminalRestore();
     const exitLine = target.exitHint ?? `Exit ${target.label} to return to the dashboard`;
     process.stdout.write(`\x1b[2J\x1b[H── ${target.label} · opened from the TwilioWorld toolkit ──\n`);
+    if (target.hint) process.stdout.write(`First run: ${target.hint}\n`);
     process.stdout.write(`${exitLine[0].toUpperCase()}${exitLine.slice(1)}. To open it again later, run:\n  ${prepared.command}\n\n`);
     const result = runTakeover(prepared.scriptPath, []);
     renderer.resume();
@@ -282,7 +279,7 @@ async function main() {
     const prepared = prepareLaunch(target);
     if ("error" in prepared) {
       back();
-      flash(`⚠  ${prepared.error}`, THEME.danger);
+      flash(`⚠ ${prepared.error}`, THEME.danger);
       return;
     }
     openHere(prepared);
@@ -321,9 +318,9 @@ async function main() {
     const result = await openUrl(url);
     if (result.ok) {
       setActivity(`${label}: ${shownUrl} · ${timeLabel()}`);
-      flash(`✓  Opened ${label} in your browser — ${shownUrl}`, GREEN);
+      flash(`✓ Opened ${label} in your browser — ${shownUrl}`, GREEN);
     } else {
-      flash(`⚠  ${result.error ?? `Could not open a browser. Visit ${shownUrl}`}`, YELLOW);
+      flash(`⚠ ${result.error ?? `Could not open a browser. Visit ${shownUrl}`}`, YELLOW);
     }
   }
 
@@ -361,9 +358,9 @@ async function main() {
     const result = await openLlamaWebUi();
     if (result.ok) {
       setActivity(`Browser chat: ${shown} · ${timeLabel()}`);
-      flash(`✓  Opened browser chat — ${shown}`, GREEN);
+      flash(`✓ Opened browser chat — ${shown}`, GREEN);
     } else {
-      flash(`⚠  ${result.error ?? "Could not open a browser"} — visit ${shown}`, THEME.danger);
+      flash(`⚠ ${result.error ?? "Could not open a browser"} — visit ${shown}`, THEME.danger);
     }
     refreshStatus();
   }
@@ -490,7 +487,7 @@ async function main() {
       onPiNeedsModel: () => reviewLocalAi("pi"),
       detectedAgents: detectAgentPlans().map((p) => p.name),
       onAddToAll: addToAllAgents,
-    }), "Set up a coding agent");
+    }), "Set up coding agents");
   }
 
   /** Add Twilio Skills + Docs to every agent on this computer, after a review. */
@@ -572,22 +569,22 @@ async function main() {
           id: "devphone-screen",
           route: "Dashboard / Dev Phone",
           title: "Dev Phone",
-          subtitle: "Browser soft phone. Escape returns to dashboard.",
-	          bodyTitle: "Dev Phone",
-	          options: [
-	            {
-	              name: doneLabel(Boolean(latestStatus?.devPhone.installed), "Open Dev Phone"),
-	              description: latestStatus?.devPhone.installed
-	                ? "installed — choose where it opens"
-	                : "review what installs, then open",
-	              onSelect: () => { openDevPhone(); return false; },
-	            },
-	            {
-	              name: "Uninstall Dev Phone",
-	              description: latestStatus?.devPhone.installed
-	                ? "remove the @twilio-labs/plugin-dev-phone plugin"
-	                : "not installed",
-	              onSelect: () => {
+          subtitle: "A browser phone for testing real SMS and voice. Use a spare number.",
+          bodyTitle: "Dev Phone",
+          options: [
+            {
+              name: "Open Dev Phone",
+              description: latestStatus?.devPhone.installed
+                ? "opens in this terminal · Ctrl+C returns here"
+                : "not installed · review what installs, then open",
+              onSelect: () => { openDevPhone(); return false; },
+            },
+            {
+              name: "Uninstall Dev Phone",
+              description: latestStatus?.devPhone.installed
+                ? "remove the Dev Phone plugin"
+                : "not installed",
+              onSelect: () => {
                 runAction("Uninstall Dev Phone", (onLog, onDone) => runUninstall({ keys: ["devPhone"] as UninstallKey[], onLog, onDone }));
                 return false;
               },
@@ -604,64 +601,64 @@ async function main() {
             id: "cli-screen",
             route: "Dashboard / Twilio CLI",
             title: "Twilio CLI",
-            subtitle: "Your account appears in System status once you log in. Escape returns to dashboard.",
+            subtitle: "An isolated Twilio CLI. It never touches your system CLI or its profiles.",
             bodyTitle: "Twilio CLI",
             options: [
-	            {
-	              name: doneLabel(Boolean(latestStatus?.twilio.installed), "Open a terminal"),
-	              description: latestStatus?.twilio.installed
-	                ? "isolated terminal with the toolkit's Twilio CLI"
-	                : "review what installs, then open an isolated terminal",
-	              onSelect: () => { withTwilioCli(twilioShellTarget); return false; },
-	            },
-	            {
-	              name: doneLabel(Boolean(latestStatus?.twilio.sid), "Log in (add an account)"),
-	              description: latestStatus?.twilio.sid
-	                ? `logged in as ${latestStatus.twilio.profile}`
-	                : "run twilio login — choose where it opens",
-              onSelect: () => { withTwilioCli(twilioLoginTarget); return false; },
-            },
-	            {
-	              name: "Switch account",
-	              description: latestStatus?.twilio.sid
-	                ? `active: ${latestStatus.twilio.profile}`
-	                : "choose among this toolkit's isolated Twilio CLI profiles",
-              onSelect: () => {
-                if (!have("twilio")) { flash("⚠  Toolkit-local Twilio CLI not installed", YELLOW); return true; }
-                const profiles = listTwilioProfiles();
-                if (profiles.length === 0) { flash("⚠  No profiles — use Log in first", YELLOW); return false; }
-                if (profiles.length === 1) { flash(`Only one account: ${profiles[0].id}`, YELLOW); return false; }
-                showRoute(buildSubmenuScreen(renderer, {
-                  id: "cli-profiles",
-                  route: "Dashboard / Twilio CLI / Switch account",
-                  title: "Switch Twilio account",
-                  subtitle: "Pick the profile to make active. Escape goes back.",
-                  bodyTitle: "Accounts",
-                  options: profiles.map((p) => ({
-                    name: `${p.active ? "● " : "  "}${p.id}`,
-                    description: `${p.accountSid}${p.active ? "  (active)" : ""}`,
-                    onSelect: () => {
-                      if (p.active) { flash(`Already on ${p.id}`, YELLOW); showCliMenu(); return false; }
-                      const okSwitched = useTwilioProfile(p.id);
-                      flash(okSwitched ? `✓  Switched to ${p.id}` : `⚠  Could not switch to ${p.id}`, okSwitched ? GREEN : YELLOW);
-                      refreshStatus();
-                      refreshStatus(500);
-                      showCliMenu();
-                      return false;
-                    },
-                  })),
-                }, showCliMenu), "Switch Twilio account");
-                return false;
+              {
+                name: "Open a Twilio CLI terminal",
+                description: latestStatus?.twilio.installed
+                  ? "a shell with the toolkit's Twilio CLI · type exit to return"
+                  : "not installed · review what installs, then open",
+                onSelect: () => { withTwilioCli(twilioShellTarget); return false; },
               },
-            },
-	            {
-	              name: "Uninstall Twilio CLI",
-	              description: latestStatus?.twilio.installed ? "remove .toolkit-local Twilio CLI + profiles" : "not installed",
-              onSelect: () => {
-                runAction("Uninstall Twilio CLI", (onLog, onDone) => runUninstall({ keys: ["twilioCli"] as UninstallKey[], onLog, onDone }));
-                return false;
+              {
+                name: "Log in",
+                description: latestStatus?.twilio.sid
+                  ? `logged in as ${latestStatus.twilio.profile} · add another account`
+                  : "add a Twilio account with twilio login",
+                onSelect: () => { withTwilioCli(twilioLoginTarget); return false; },
               },
-            },
+              {
+                name: "Switch account",
+                description: latestStatus?.twilio.sid
+                  ? `active: ${latestStatus.twilio.profile}`
+                  : "choose between logged-in accounts",
+                onSelect: () => {
+                  if (!have("twilio")) { flash("⚠ The Twilio CLI isn't installed yet", YELLOW); return true; }
+                  const profiles = listTwilioProfiles();
+                  if (profiles.length === 0) { flash("⚠ No accounts yet — use Log in first", YELLOW); return false; }
+                  if (profiles.length === 1) { flash(`Only one account: ${profiles[0].id}`, YELLOW); return false; }
+                  showRoute(buildSubmenuScreen(renderer, {
+                    id: "cli-profiles",
+                    route: "Dashboard / Twilio CLI / Switch account",
+                    title: "Switch Twilio account",
+                    subtitle: "Choose the profile to make active.",
+                    bodyTitle: "Accounts",
+                    options: profiles.map((p) => ({
+                      name: `${p.active ? "● " : "  "}${p.id}`,
+                      description: `${p.accountSid}${p.active ? " · active" : ""}`,
+                      onSelect: () => {
+                        if (p.active) { flash(`Already on ${p.id}`, YELLOW); showCliMenu(); return false; }
+                        const okSwitched = useTwilioProfile(p.id);
+                        flash(okSwitched ? `✓ Switched to ${p.id}` : `⚠ Could not switch to ${p.id}`, okSwitched ? GREEN : YELLOW);
+                        refreshStatus();
+                        refreshStatus(500);
+                        showCliMenu();
+                        return false;
+                      },
+                    })),
+                  }, showCliMenu), "Switch Twilio account");
+                  return false;
+                },
+              },
+              {
+                name: "Uninstall Twilio CLI",
+                description: latestStatus?.twilio.installed ? "remove the toolkit's Twilio CLI and its profiles" : "not installed",
+                onSelect: () => {
+                  runAction("Uninstall Twilio CLI", (onLog, onDone) => runUninstall({ keys: ["twilioCli"] as UninstallKey[], onLog, onDone }));
+                  return false;
+                },
+              },
             ],
           }, back), "Twilio CLI");
         };

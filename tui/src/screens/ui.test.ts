@@ -59,7 +59,7 @@ test("Resources renders as a dedicated top-level route", async () => {
   const frame = t.captureCharFrame();
   expect(frame).toContain("Dashboard / Resources");
   expect(frame).toContain("TwilioWorld");
-  expect(frame).toContain("Twilio AI Docs");
+  expect(frame).toContain("Twilio AI docs");
 });
 
 test("coding-agent setup requires review before installation", async () => {
@@ -108,7 +108,7 @@ test("welcome asks what to do first and downloads nothing", async () => {
   await t.renderOnce();
   const frame = t.captureCharFrame();
   expect(frame).toContain("What would you like to do first?");
-  expect(frame).toContain("Set up a coding agent  (recommended)");
+  expect(frame).toContain("Set up a coding agent (recommended)");
   expect(frame).toContain("Try private local chat");
   expect(frame).toContain("Look around first");
   await Bun.sleep(250);
@@ -133,7 +133,7 @@ test("local AI asks for the model before downloading and shows what else install
   }));
   await t.renderOnce();
   const frame = t.captureCharFrame();
-  expect(frame).toContain("Gemma 4 E2B  (recommended)");
+  expect(frame).toContain("Gemma 4 E2B (recommended)");
   expect(frame).toContain("Phi-4-mini");
   expect(frame).toContain("llamafile runtime (302MB) and the Pi terminal interface");
   expect(frame).toContain("Free disk space: 42.5 GB");
@@ -248,7 +248,7 @@ test("dashboard renders the visual hierarchy at wide width", async () => {
   expect(frame).toContain("System status");
   expect(frame).toContain("Local chat");
   expect(frame).toContain("●  Local AI");
-  expect(frame).toContain("OVERVIEW");
+  expect(frame).toContain("Overview");
   expect(frame).toContain("╭───┴───╮");
   dashboard.dispose();
 });
@@ -322,7 +322,7 @@ test("welcome recommends adding Twilio to agents already installed", async () =>
   t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", detectedAgents: ["Claude Code", "Codex"], onChoose: (c) => chosen.push(c) }));
   await t.renderOnce();
   const frame = t.captureCharFrame();
-  expect(frame).toContain("Add Twilio to my coding agents  (recommended)");
+  expect(frame).toContain("Add Twilio to my coding agents (recommended)");
   expect(frame).toContain("found Claude Code, Codex");
   expect(frame).toContain("Set up a specific agent");
   await Bun.sleep(250);

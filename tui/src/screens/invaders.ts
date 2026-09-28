@@ -30,7 +30,7 @@ export function buildInvadersScreen(renderer: CliRenderer, onCancel: () => void)
     title: "Signal Invaders",
     subtitle: "Defend the terminal uplink.",
     bodyTitle: "Arcade",
-    footer: shortcutBar(["←→", "move"], ["Space", "fire"], ["R", "restart"], ["Esc", "dashboard"]),
+    footer: shortcutBar(["←→", "move"], ["Space", "fire"], ["R", "restart"], ["Esc", "back"]),
   });
   screen.focusable = true;
 

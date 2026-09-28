@@ -29,9 +29,9 @@ export function buildModelPickerScreen(
     id: "model-picker-screen",
     route: "Dashboard / Local chat / Local AI settings / Change model",
     title: "Change model",
-    subtitle: "Choose which local model to use. Already-downloaded models switch instantly.",
+    subtitle: "Downloaded models switch instantly; others download first.",
     bodyTitle: "Available models",
-    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    footer: shortcutBar(["Enter", "select"], ["Esc", "back"]),
   });
 
   const select = new SelectRenderable(renderer, {

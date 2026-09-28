@@ -79,7 +79,7 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
 
   const footer = new TextRenderable(renderer, {
     id: `${opts.id}-footer`,
-    content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    content: opts.footer ?? shortcutBar(["Enter", "select"], ["Esc", "back"]),
     fg: THEME.dim2,
     flexShrink: 0,
   });
@@ -139,7 +139,7 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
 
   const footer = new TextRenderable(renderer, {
     id: `${opts.id}-footer`,
-    content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
+    content: opts.footer ?? shortcutBar(["Enter", "select"], ["Esc", "back"]),
     fg: THEME.dim2,
     flexShrink: 0,
   });

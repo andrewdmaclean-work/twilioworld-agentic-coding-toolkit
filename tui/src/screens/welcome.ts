@@ -39,12 +39,12 @@ export function buildWelcomeScreen(
   const choices: Array<{ value: WelcomeChoice; name: string; description: string }> = [
     ...(detected.length ? [{
       value: "all" as const,
-      name: "Add Twilio to my coding agents  (recommended)",
+      name: "Add Twilio to my coding agents (recommended)",
       description: `found ${detected.join(", ")} · installs nothing new`,
     }] : []),
     {
       value: "agent",
-      name: detected.length ? "Set up a specific agent" : "Set up a coding agent  (recommended)",
+      name: detected.length ? "Set up a specific agent" : "Set up a coding agent (recommended)",
       description: detected.length
         ? "install one (e.g. Claude Code or Pi) and open it"
         : "Claude Code, Codex, Cursor, OpenCode, Copilot, or Pi · no large download",

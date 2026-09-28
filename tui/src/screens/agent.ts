@@ -42,11 +42,11 @@ export function buildAgentScreen(renderer: CliRenderer, opts: AgentScreenOptions
   ];
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "agent-screen",
-    route: "Dashboard / Set up a coding agent",
-    title: "Set up a coding agent",
-    subtitle: "Adds Twilio knowledge, then you choose where the agent opens. Missing CLIs may be installed.",
+    route: "Dashboard / Set up coding agents",
+    title: "Set up coding agents",
+    subtitle: "Adds Twilio Skills and live Docs, then opens the agent here. Missing CLIs are installed first.",
     bodyTitle: "Choose an agent",
-    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "review"]),
+    footer: shortcutBar(["Enter", "review"], ["Esc", "back"]),
   });
 
   const select = new SelectRenderable(renderer, {

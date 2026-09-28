@@ -81,7 +81,7 @@ export type PiReadiness =
 export function checkPiReadiness(): PiReadiness {
   if (!localModelAvailable()) return { ok: false, reason: "Local AI is not installed. Open Local chat to choose and download a model." };
   if (!nodeSupportsPi()) return { ok: false, reason: `Pi requires project-local Node >= 22.19.0 — node is ${piNodeVersionLabel()}. Re-run ./toolkit to repair .toolkit/toolchains/node-v22.` };
-  if (!have("pi")) return { ok: false, reason: "Pi is not installed. Run Set up a coding agent." };
+  if (!have("pi")) return { ok: false, reason: "Pi is not installed. Open Local chat → Pi to install it." };
   return { ok: true };
 }
 
@@ -135,7 +135,7 @@ export async function preparePi(opts: { onLog: LogFn }): Promise<LaunchTarget | 
       timeoutSeconds: 90,
       onTick: (elapsed, status) => {
         if (elapsed === 1 || elapsed % 10 === 0) {
-          onLog(`   Loading local AI… ${elapsed}s elapsed (${status})`, "stdout");
+          onLog(`  Loading local AI… ${elapsed}s elapsed (${status})`, "stdout");
         }
       },
     });

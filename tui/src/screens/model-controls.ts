@@ -27,7 +27,7 @@ export function buildModelControlsScreen(
   let showThinking = opts.showThinking;
   const thinkingOption: SubmenuOption = {
     name: `Show reasoning: ${showThinking ? "Yes" : "No"}`,
-    description: "shows or hides Pi reasoning blocks without changing reasoning effort",
+    description: "show or hide Pi's reasoning blocks; doesn't change effort",
     onSelect: () => {
       showThinking = opts.onToggleThinking(showThinking);
       thinkingOption.name = `Show reasoning: ${showThinking ? "Yes" : "No"}`;
@@ -38,7 +38,7 @@ export function buildModelControlsScreen(
   let reasoningMode = opts.reasoningMode;
   const effortOption: SubmenuOption = {
     name: `Reasoning effort: ${reasoningLabel(reasoningMode)}`,
-    description: "Off disables reasoning; Low, Medium, and High stay independent from its display",
+    description: "how much the model reasons before answering",
     onSelect: () => {
       reasoningMode = opts.onToggleReasoning(reasoningMode);
       effortOption.name = `Reasoning effort: ${reasoningLabel(reasoningMode)}`;
@@ -57,17 +57,17 @@ export function buildModelControlsScreen(
       effortOption,
       {
         name: `Model: ${opts.selectedModelName}`,
-        description: "choose the local model shared by the browser interface and Pi",
+        description: "shared by browser chat and Pi",
         onSelect: () => { opts.onChangeModel(); return false; },
       },
       {
         name: "Stop local AI",
-        description: opts.status?.model.running ? `currently running on :${MODEL_SERVER_PORT}` : "the local AI is not running",
+        description: opts.status?.model.running ? `running on :${MODEL_SERVER_PORT}` : "not running",
         onSelect: () => { opts.onStop(); return true; },
       },
       {
         name: "Remove downloaded model",
-        description: opts.status?.model.ready ? `free approximately ${getSelectedModel().sizeLabel} of local storage` : "no model files are installed",
+        description: opts.status?.model.ready ? `frees about ${getSelectedModel().sizeLabel}` : "nothing downloaded",
         onSelect: () => { opts.onRemove(); return false; },
       },
     ],
