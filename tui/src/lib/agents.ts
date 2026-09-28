@@ -53,7 +53,7 @@ export function agentPickerOptions(): Array<{ name: string; description: string;
     if (!agent.bin) return { name: agent.name, value: agent.value, description: "manual Skills and MCP wiring instructions" };
     const state = readAgentState(agent);
     const installed = state.installed ? "installed" : "not installed";
-    const configured = state.configured ? "Twilio configured" : "not configured";
-    return { name: agent.name, value: agent.value, description: `${installed} · ${configured} · sign-in ${state.auth}` };
+    const configured = state.configured ? "Twilio configured" : "Twilio not configured yet";
+    return { name: agent.name, value: agent.value, description: `${installed} · ${configured}` };
   });
 }

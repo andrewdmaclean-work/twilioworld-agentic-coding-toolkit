@@ -114,7 +114,7 @@ export function buildAgentScreen(
         if (ok && ready) onLaunch(ready);
         else onFinished(ok);
       },
-      { successAction: () => ready ? `choose where to open ${ready.label}` : undefined },
+      { successAction: () => ready ? "choose where it opens" : undefined },
     );
     removeAllChildren(screen);
     screen.add(logScreen);

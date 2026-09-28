@@ -343,7 +343,7 @@ async function main() {
       if (ok && ready) handoff(ready);
       else if (opts.then) { backRoute(); busy = false; refreshStatus(); opts.then(ok); }
       else back();
-    }, { successAction: () => ready ? `choose where to open ${ready.label}` : undefined }), title);
+    }, { successAction: () => ready ? "choose where it opens" : undefined }), title);
   }
 
   async function openBrowser(url: string, label: string, shownUrl = url): Promise<void> {
