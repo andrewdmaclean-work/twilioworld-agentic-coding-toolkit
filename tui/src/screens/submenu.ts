@@ -12,7 +12,7 @@ import {
 } from "@opentui/core";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 
 export interface SubmenuOption {
   name: string;
@@ -45,7 +45,7 @@ export function buildSubmenuScreen(
 
   const select = new SelectRenderable(renderer, {
     id: `${opts.id}-select`,
-    height: opts.options.length + 2,
+    height: listHeight(opts.options.length),
     flexGrow: 1,
     flexShrink: 1,
     minHeight: 4,

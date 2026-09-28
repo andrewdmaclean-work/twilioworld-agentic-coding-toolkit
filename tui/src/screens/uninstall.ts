@@ -10,7 +10,7 @@ import {
 import { CheckList, type CheckItem } from "../checklist.ts";
 import { runUninstall, type UninstallKey } from "../lib/uninstall.ts";
 import { THEME } from "../theme.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
@@ -64,7 +64,7 @@ export function buildUninstallScreen(
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "uninstall-confirm-select",
-    height: 4,
+    height: listHeight(2),
     flexGrow: 1,
     flexShrink: 0,
     visible: false,

@@ -126,14 +126,15 @@ export function detailFor(item: MenuItem | undefined, status: ToolkitStatus | nu
         row("Account", status?.twilio.sid ? `${status.twilio.profile} (${status.twilio.sid})` : "Not logged in"),
       ].join("\n");
     case "resources":
-      return "Resources\n  Open TwilioWorld or browse the Twilio AI docs.";
+      return "Overview\n  Open TwilioWorld or browse the Twilio AI docs in your browser.";
     case "settings":
       return [
-        "Settings",
-        row("Check & repair", "Verify and fix Skills, Docs, local AI, and tools."),
-        row("Uninstall", "Review what the toolkit installed, then remove it."),
+        "Overview",
+        "  Features install when you first choose them, so there's no setup step here. Local AI settings are under Local chat.",
         "",
-        "  Features install when you first choose them. Local AI settings are under Local chat.",
+        "Options",
+        row("Check & repair", "Verify and fix Skills, Docs, local AI, and tools"),
+        row("Uninstall", "Review what the toolkit installed, then remove it"),
       ].join("\n");
   }
 }

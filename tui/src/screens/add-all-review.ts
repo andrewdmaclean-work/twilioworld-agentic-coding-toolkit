@@ -10,7 +10,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
@@ -49,7 +49,7 @@ export function buildAddAllReviewScreen(
 
   const select = new SelectRenderable(renderer, {
     id: "add-all-select",
-    height: 5,
+    height: listHeight(2),
     flexShrink: 1,
     minHeight: 4,
     options: [

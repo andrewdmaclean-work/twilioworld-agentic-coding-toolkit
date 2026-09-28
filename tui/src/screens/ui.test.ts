@@ -10,6 +10,7 @@ import { buildWelcomeScreen } from "./welcome.ts";
 import { buildLocalAiInstallScreen } from "./local-ai-install.ts";
 import { buildAddAllReviewScreen } from "./add-all-review.ts";
 import { buildLogScreen } from "./log.ts";
+import { routeLabels } from "./chrome.ts";
 import { buildAgentScreen } from "./agent.ts";
 import { buildLocalChatScreen } from "./local-chat.ts";
 import { buildModelControlsScreen } from "./model-controls.ts";
@@ -34,7 +35,7 @@ test("Settings renders only configuration actions", async () => {
   t.renderer.root.add(screen);
   (screen.findDescendantById("settings-screen-select") as SelectRenderable).focus();
   await t.renderOnce();
-  expect(t.captureCharFrame()).toContain("Settings");
+  expect(routeLabels.get(screen)).toBe("Settings");
   expect(t.captureCharFrame()).toContain("Check & repair");
   expect(t.captureCharFrame()).not.toContain("Install or repair");
   expect(t.captureCharFrame()).toContain("Uninstall or reset");
@@ -57,7 +58,7 @@ test("Resources renders as a dedicated top-level route", async () => {
   t.renderer.root.add(screen);
   await t.renderOnce();
   const frame = t.captureCharFrame();
-  expect(frame).toContain("Dashboard / Resources");
+  expect(routeLabels.get(screen)).toBe("Resources");
   expect(frame).toContain("TwilioWorld");
   expect(frame).toContain("Twilio AI docs");
 });

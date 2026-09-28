@@ -1,6 +1,9 @@
 import {
   BoxRenderable,
+  StyledText,
   TextRenderable,
+  bold,
+  fg,
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
@@ -90,6 +93,10 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
   return { screen, body, footer };
 }
 
+/** Breadcrumb for each embedded screen ("Local chat / Choose a model"). The
+ *  dashboard shows it as the panel title, so screens don't repeat their name. */
+export const routeLabels = new WeakMap<BoxRenderable, string>();
+
 export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions): RouteChrome {
   const screen = new BoxRenderable(renderer, {
     id: opts.id,
@@ -100,23 +107,25 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     gap: 1,
     backgroundColor: THEME.panelBg,
   });
+  const crumbs = opts.route.replace(/^Dashboard \/ /, "");
+  routeLabels.set(screen, crumbs);
+
+  // The title only appears when it says more than the breadcrumb already does.
 
   const header = new BoxRenderable(renderer, {
     id: `${opts.id}-header`,
-    borderStyle: "single",
-    borderColor: THEME.border,
-    title: ` ${opts.route} `,
-    titleColor: THEME.redSoft,
-    paddingX: 1,
     flexDirection: "column",
     flexShrink: 0,
     backgroundColor: THEME.panelBg,
   });
-  header.add(new TextRenderable(renderer, {
-    id: `${opts.id}-title`,
-    content: opts.title,
-    fg: THEME.white,
-  }));
+  if (opts.title && !crumbs.endsWith(opts.title)) {
+    header.add(new TextRenderable(renderer, {
+      id: `${opts.id}-title`,
+      content: new StyledText([fg(THEME.white)(bold(opts.title))]),
+      width: "100%",
+      wrapMode: "word",
+    }));
+  }
   if (opts.subtitle) {
     header.add(new TextRenderable(renderer, {
       id: `${opts.id}-subtitle`,
@@ -144,7 +153,7 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     flexShrink: 0,
   });
 
-  screen.add(header);
+  if (header.getChildren().length) screen.add(header);
   screen.add(body);
   screen.add(footer);
   return { screen, body, footer };

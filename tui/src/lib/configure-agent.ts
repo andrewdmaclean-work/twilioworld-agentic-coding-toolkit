@@ -19,6 +19,7 @@ function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
 function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
+function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
 
 /** Try package-manager installers in order. Remote script installers are
  * intentionally excluded: configuration should not execute unreviewed code. */
@@ -270,22 +271,19 @@ export async function configureAgent(opts: {
 
   } else {
     // Other / Bring my own
-    say("=== Bring Your Own Agent ===", onLog);
-    say("Everything uses open standards: Agent Skills + MCP.", onLog);
+    step("Bring your own agent", onLog);
+    say("Everything here uses open standards (Agent Skills and MCP), so it works with Gemini CLI, JetBrains Junie, and 30+ other agents.", onLog);
     if (capabilities.docs) {
-      say("", onLog);
-      say(`  Live Twilio Docs (HTTP, no login):  ${DOCS_MCP_URL}`, onLog);
+      step("Live Twilio Docs · HTTP MCP server, no login", onLog);
+      say(`  ${DOCS_MCP_URL}`, onLog);
     }
     if (capabilities.skills) {
-      say("", onLog);
-      say("  Twilio Skills — copy to your agent's skills directory:", onLog);
-      say(`      cp -r "${join(ROOT, "vendor", "twilio-ai", "skills")}" ~/.agents/skills/`, onLog);
+      step("Twilio Skills · copy into your agent's skills folder", onLog);
+      say(`  mkdir -p ~/.agents/skills && cp -r "${join(ROOT, "vendor", "twilio-ai", "skills")}"/* ~/.agents/skills/`, onLog);
     }
-    say("", onLog);
-    say("  Local model (OpenAI-compatible):", onLog);
-    say(`      ${MODEL_SERVER_BASE_URL}/v1   (launch from Local chat)`, onLog);
-    say("", onLog);
-    say("  Works with Copilot, Gemini CLI, JetBrains Junie + 30 more.", onLog);
+    step("Local model · OpenAI-compatible endpoint", onLog);
+    say(`  ${MODEL_SERVER_BASE_URL}/v1`, onLog);
+    say("  Start it from Local chat first.", onLog);
   }
 
   onDone(true);

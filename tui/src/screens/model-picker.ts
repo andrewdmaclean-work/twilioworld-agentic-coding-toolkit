@@ -10,7 +10,7 @@ import {
 } from "@opentui/core";
 import { LOCAL_MODELS, getSelectedModel, localModelInstalled } from "../lib/local-models.ts";
 import { setLocalModelSlug } from "../lib/config.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
@@ -36,7 +36,7 @@ export function buildModelPickerScreen(
 
   const select = new SelectRenderable(renderer, {
     id: "model-picker-select",
-    height: LOCAL_MODELS.length + 2,
+    height: listHeight(LOCAL_MODELS.length),
     flexGrow: 1,
     flexShrink: 0,
     options: LOCAL_MODELS.map((m, i) => ({
@@ -57,7 +57,7 @@ export function buildModelPickerScreen(
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "model-picker-confirm-select",
-    height: 4,
+    height: listHeight(2),
     flexGrow: 1,
     flexShrink: 0,
     visible: false,

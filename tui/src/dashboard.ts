@@ -13,6 +13,7 @@ import {
 import type { ToolkitStatus } from "./status.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
 import { buildInvadersScreen } from "./screens/invaders.ts";
+import { routeLabels } from "./screens/chrome.ts";
 import { THEME } from "./theme.ts";
 import { SELECT_STYLE, shortcutBar, styleDetail, wrapText } from "./ui-style.ts";
 import { detailFor, headlineText, nextMove, statusLines, visibleItems, type ItemId, type MenuItem } from "./dashboard-content.ts";
@@ -109,7 +110,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     width: MENU_W - 2, height: 10, // overridden by resize()
     options: [],
     ...SELECT_STYLE,
-    showScrollIndicator: false, showDescription: false,
+    showScrollIndicator: false, showDescription: false, itemSpacing: 0,
   });
   menuCol.add(menuList);
 
@@ -354,7 +355,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     }
     routeScreen = screen;
     if (narrowLayout) compactPane = "details";
-    detailCol.title = ` ${title} `;
+    detailCol.title = ` ${routeLabels.get(screen) ?? title} `;
     detailCol.add(screen);
     resize();
     if (screen.focusable) screen.focus();

@@ -10,7 +10,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { buildRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
@@ -63,7 +63,7 @@ export function buildWelcomeScreen(
 
   const select = new SelectRenderable(renderer, {
     id: "welcome-select",
-    height: choices.length * 2 + 1,
+    height: listHeight(choices.length),
     flexShrink: 1,
     minHeight: 4,
     options: choices.map((c) => ({ name: c.name, description: c.description, value: c.value })),

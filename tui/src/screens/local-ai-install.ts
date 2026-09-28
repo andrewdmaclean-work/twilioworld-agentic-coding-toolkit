@@ -12,7 +12,7 @@ import {
 import { LLAMAFILE_SIZE_LABEL } from "../lib/constants.ts";
 import { DEFAULT_MODEL_SLUG, LOCAL_MODELS, type LocalModel } from "../lib/local-models.ts";
 import { THEME } from "../theme.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
@@ -34,7 +34,7 @@ export function buildLocalAiInstallScreen(
     id: "local-ai-install-screen",
     route: "Dashboard / Local chat / Choose a model",
     title: "Set up private local chat",
-    subtitle: "Runs entirely on this computer. Downloads once into this repo (models/ and tools/).",
+    subtitle: "Runs entirely on this computer. It downloads once, into this repo.",
     bodyTitle: "Choose a model",
     footer: shortcutBar(["Enter", "download and open"], ["Esc", "back"]),
   });
@@ -67,7 +67,7 @@ export function buildLocalAiInstallScreen(
   ];
   const select = new SelectRenderable(renderer, {
     id: "local-ai-install-select",
-    height: options.length * 2 + 1,
+    height: listHeight(options.length),
     flexShrink: 1,
     minHeight: 4,
     options,

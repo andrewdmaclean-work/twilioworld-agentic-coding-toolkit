@@ -58,7 +58,7 @@ export class CheckList {
     // of shrink-wrapping to item count, so the list doesn't leave a big
     // empty gap below it when there's room to show more. Explicit
     // opts.width/opts.height (if ever passed) still win.
-    const height = opts.height ?? Math.min(items.length + 1, 14);
+    const height = opts.height ?? items.length * 3;
 
     this._select = new SelectRenderable(renderer, {
       id: `${id}-select`,

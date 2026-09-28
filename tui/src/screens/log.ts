@@ -17,7 +17,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
-import { shortcutBar, wrapText } from "../ui-style.ts";
+import { shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
@@ -60,7 +60,7 @@ export function buildLogScreen(
   const successFooter = () => shortcutBar(["Enter", opts.successAction?.() ?? "return"], ["D", "details"]);
   const { screen, body, footer } = buildEmbeddedRouteChrome(renderer, {
     id: "log-screen",
-    route: "Dashboard / Task log",
+    route: `Dashboard / ${title}`,
     title,
     subtitle: "",
     bodyTitle: "Live output",
@@ -98,8 +98,21 @@ export function buildLogScreen(
   const recentSteps: string[] = [];
   const dismissGuard = createInputGuard();
 
-  function onLog(line: string, stream: "stdout" | "stderr") {
-    if (!line.trim()) return; // skip blank lines
+  let lastWasSpacer = true;
+
+  /** One blank line between groups; never two in a row or at the top. */
+  function addSpacer(): void {
+    if (lastWasSpacer) return;
+    lastWasSpacer = true;
+    lineCount++;
+    scroll.content.add(new TextRenderable(renderer, { id: `log-line-${lineCount}`, content: "" }));
+  }
+
+  function onLog(rawLine: string, stream: "stdout" | "stderr") {
+    // Steps are logged as "\n▶ …": the newline means "start a new group".
+    if (rawLine.startsWith("\n")) addSpacer();
+    const line = rawLine.replace(/^\n+/, "").trimEnd();
+    if (!line.trim()) { addSpacer(); return; }
     const logKey = `${stream}:${line}`;
     if (logKey === lastLogKey) return;
     lastLogKey = logKey;
@@ -124,13 +137,20 @@ export function buildLogScreen(
       }
     }
     lineCount++;
-    const wrapped = wrapText(line, Math.max(24, (scroll.width ?? renderer.width) - 8));
+    lastWasSpacer = false;
+    // The renderer wraps to the panel's real width (and re-wraps on resize).
+    // Indentation becomes a left margin so wrapped lines stay indented.
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    const text = line.slice(indent);
     scroll.content.add(
       new TextRenderable(renderer, {
         id: `log-line-${lineCount}`,
         // Section lines ("▶ [1/3] Twilio knowledge") read as headings.
-        content: line.startsWith("▶") ? new StyledText([fg(THEME.red)(bold(wrapped))]) : wrapped,
-        fg: colorFor(line, stream),
+        content: text.startsWith("▶") ? new StyledText([fg(THEME.red)(bold(text))]) : text,
+        fg: colorFor(text, stream),
+        marginLeft: indent,
+        wrapMode: "word",
+        flexShrink: 0,
       }),
     );
   }
@@ -158,6 +178,7 @@ export function buildLogScreen(
     for (const child of [...scroll.content.getChildren()]) scroll.content.remove(child.id);
     lineCount = 0;
     lastLogKey = "";
+    lastWasSpacer = true;
     recentSteps.length = 0;
     timeline.content = "";
   }

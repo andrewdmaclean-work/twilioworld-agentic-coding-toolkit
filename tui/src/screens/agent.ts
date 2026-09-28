@@ -10,7 +10,7 @@ import {
 import { configureAgent } from "../lib/configure-agent.ts";
 import type { LaunchTarget } from "../lib/terminal.ts";
 import { agentPickerOptions } from "../lib/agents.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
@@ -51,7 +51,7 @@ export function buildAgentScreen(renderer: CliRenderer, opts: AgentScreenOptions
 
   const select = new SelectRenderable(renderer, {
     id: "agent-select",
-    height: agentOptions.length + 2,
+    height: listHeight(agentOptions.length),
     flexGrow: 1,
     flexShrink: 1,
     minHeight: 4,
@@ -72,7 +72,7 @@ export function buildAgentScreen(renderer: CliRenderer, opts: AgentScreenOptions
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "agent-confirm-select",
-    height: 4,
+    height: listHeight(2),
     flexGrow: 1,
     flexShrink: 1,
     minHeight: 4,

@@ -11,7 +11,15 @@ export const SELECT_STYLE = {
   descriptionColor: THEME.dim2,
   selectedDescriptionColor: THEME.silver,
   showSelectionIndicator: true,
+  // A blank line between options keeps each name + description visibly one
+  // choice. Lists without descriptions (the Actions menu) set this to 0.
+  itemSpacing: 1,
 } as const;
+
+/** Rows a list needs: name + description + spacing per option. */
+export function listHeight(count: number): number {
+  return count * 3;
+}
 
 export const INPUT_STYLE = {
   backgroundColor: THEME.panelRaised,
