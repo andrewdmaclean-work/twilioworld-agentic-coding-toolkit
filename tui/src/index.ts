@@ -18,13 +18,15 @@ import { buildUninstallScreen } from "./screens/uninstall.ts";
 import { buildLocalChatScreen } from "./screens/local-chat.ts";
 import { buildHandoffScreen } from "./screens/handoff.ts";
 import { TWILIO_CLI_INSTALL_SUMMARY, buildInstallReviewScreen, buildQuitScreen, devPhoneInstallSummary } from "./screens/prompts.ts";
-import { configureAgent } from "./lib/configure-agent.ts";
+import { configureAgent, selectedAgentCapabilities } from "./lib/configure-agent.ts";
+import { addTwilioToAllAgents, detectAgentPlans } from "./lib/agent-wiring.ts";
+import { buildAddAllReviewScreen } from "./screens/add-all-review.ts";
 import {
   devPhoneTarget, downloadLocalModel, installDevPhone, installTwilioCli,
   listTwilioProfiles, stopModelServer, twilioLoginTarget, twilioShellTarget, useTwilioProfile,
 } from "./lib/actions.ts";
 import { runUninstall, type UninstallKey } from "./lib/uninstall.ts";
-import { addonEnabled, markFirstRunComplete, setLocalModelSlug, modelReasoningMode, setModelReasoningMode, setThinkingVisible, thinkingVisible, type ModelReasoningMode } from "./lib/config.ts";
+import { addonEnabled, readConfig, markFirstRunComplete, setLocalModelSlug, modelReasoningMode, setModelReasoningMode, setThinkingVisible, thinkingVisible, type ModelReasoningMode } from "./lib/config.ts";
 import {
   LLAMAFILE_DEST, ROOT, MODEL_SERVER_PID, MODEL_SERVER_PORT, MODEL_SERVER_URL, CONFIG_FILE,
 } from "./lib/constants.ts";
@@ -512,7 +514,29 @@ async function main() {
 
   function openAgentSetup(): void {
     busy = true;
-    showRoute(buildAgentScreen(renderer, back, back, handoff, () => !localAiReady(), () => reviewLocalAi("pi")), "Set up a coding agent");
+    showRoute(buildAgentScreen(renderer, {
+      onFinished: back,
+      onCancel: back,
+      onLaunch: handoff,
+      piNeedsModel: () => !localAiReady(),
+      onPiNeedsModel: () => reviewLocalAi("pi"),
+      detectedAgents: detectAgentPlans().map((p) => p.name),
+      onAddToAll: addToAllAgents,
+    }), "Set up a coding agent");
+  }
+
+  /** Add Twilio Skills + Docs to every agent on this computer, after a review. */
+  function addToAllAgents(): void {
+    const plans = detectAgentPlans();
+    if (!plans.length) { openAgentSetup(); flash("No coding agents found — pick one to install", YELLOW); return; }
+    const capabilities = selectedAgentCapabilities(readConfig().addons);
+    busy = true;
+    showRoute(buildAddAllReviewScreen(renderer, {
+      plans,
+      skills: capabilities.skills,
+      onConfirm: () => runAction("Add Twilio to my agents", (onLog, onDone) => addTwilioToAllAgents({ plans, capabilities, onLog, onDone })),
+      onCancel: back,
+    }), "Add Twilio to my agents");
   }
 
   function openDevPhone(): void {
@@ -694,7 +718,8 @@ async function main() {
     renderer.root.remove(welcome.id);
     enterDashboard();
     const go = () => {
-      if (choice === "agent") openAgentSetup();
+      if (choice === "all") addToAllAgents();
+      else if (choice === "agent") openAgentSetup();
       else if (choice === "localchat") openLocalChat();
     };
     // Clones made without --recursive lack the Skills submodule; fetch it
@@ -711,6 +736,7 @@ async function main() {
   const sizes = LOCAL_MODELS.map((m) => m.sizeBytes).sort((x, y) => x - y);
   const welcome = buildWelcomeScreen(renderer, {
     modelSizeRange: `${(sizes[0] / 1e9).toFixed(1)}–${(sizes[sizes.length - 1] / 1e9).toFixed(1)} GB`,
+    detectedAgents: existsSync(CONFIG_FILE) ? [] : detectAgentPlans().map((p) => p.name),
     onChoose: finishWelcome,
   });
   if (!existsSync(CONFIG_FILE)) {

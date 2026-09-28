@@ -14,13 +14,15 @@ import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 import { buildRouteChrome } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 
-export type WelcomeChoice = "agent" | "localchat" | "dashboard";
+export type WelcomeChoice = "all" | "agent" | "localchat" | "dashboard";
 
 export function buildWelcomeScreen(
   renderer: CliRenderer,
   opts: {
     /** e.g. "2.5–3.3 GB" */
     modelSizeRange: string;
+    /** Coding agents already on this computer. */
+    detectedAgents?: string[];
     onChoose: (choice: WelcomeChoice) => void;
   },
 ): BoxRenderable {
@@ -33,11 +35,19 @@ export function buildWelcomeScreen(
     footer: shortcutBar(["↑↓", "choose"], ["Enter", "continue"], ["Esc", "look around"]),
   });
 
+  const detected = opts.detectedAgents ?? [];
   const choices: Array<{ value: WelcomeChoice; name: string; description: string }> = [
+    ...(detected.length ? [{
+      value: "all" as const,
+      name: "Add Twilio to my coding agents  (recommended)",
+      description: `found ${detected.join(", ")} · installs nothing new`,
+    }] : []),
     {
       value: "agent",
-      name: "Set up a coding agent  (recommended)",
-      description: "Claude Code, Codex, Cursor, OpenCode, Copilot, or Pi · no large download",
+      name: detected.length ? "Set up a specific agent" : "Set up a coding agent  (recommended)",
+      description: detected.length
+        ? "install one (e.g. Claude Code or Pi) and open it"
+        : "Claude Code, Codex, Cursor, OpenCode, Copilot, or Pi · no large download",
     },
     {
       value: "localchat",

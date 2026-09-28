@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { have } from "./exec.ts";
+import { OPENCODE_GLOBAL_JSON, copilotCliInstalled } from "./agent-wiring.ts";
 import { PI_AGENT_DIR, ROOT } from "./constants.ts";
 
 export interface AgentDefinition {
@@ -23,7 +24,7 @@ export const AGENTS: AgentDefinition[] = [
   { name: "Claude Code", value: "Claude Code", bin: "claude", configFiles: [join(home, ".claude.json"), join(home, ".claude", "settings.json")] },
   { name: "Codex", value: "Codex", bin: "codex", configFiles: [join(home, ".codex", "config.toml")] },
   { name: "Cursor", value: "Cursor", bin: "cursor-agent", configFiles: [join(home, ".cursor", "mcp.json")] },
-  { name: "OpenCode", value: "OpenCode", bin: "opencode", configFiles: [join(ROOT, "opencode.json")] },
+  { name: "OpenCode", value: "OpenCode", bin: "opencode", configFiles: [OPENCODE_GLOBAL_JSON] },
   { name: "GitHub Copilot", value: "GitHub Copilot", bin: "copilot", configFiles: [join(home, ".copilot", "mcp-config.json")] },
   { name: "Pi", value: "Pi (lightweight TUI)", bin: "pi", configFiles: [join(PI_AGENT_DIR, "mcp.json")] },
   { name: "Other / Bring my own", value: "Other / Bring my own", configFiles: [] },
@@ -42,7 +43,7 @@ function containsTwilioConfig(path: string): boolean {
 export function readAgentState(agent: AgentDefinition): AgentState {
   if (!agent.bin) return { installed: false, configured: false, auth: "not applicable" };
   return {
-    installed: have(agent.bin),
+    installed: agent.bin === "copilot" ? copilotCliInstalled() : have(agent.bin),
     configured: agent.configFiles.some(containsTwilioConfig),
     auth: "checked on launch",
   };

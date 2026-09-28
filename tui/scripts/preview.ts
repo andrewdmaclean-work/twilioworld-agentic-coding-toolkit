@@ -50,7 +50,7 @@ const show = (k: string) => which === "all" || which.split(",").includes(k);
 
 if (show("welcome")) await frame("1. First run — welcome", (t) => { t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", onChoose: noop })); });
 if (show("dashboard")) await inDashboard("2. Dashboard — footer keeps the latest activity", "", () => null, "Claude Code opened in iTerm2 · 14:02");
-if (show("agent")) await inDashboard("3. Set up a coding agent — review", "Set up a coding agent", (r) => buildAgentScreen(r, noop, noop), "", async (t) => { await Bun.sleep(250); t.mockInput.pressEnter(); await t.flush(); });
+if (show("agent")) await inDashboard("3. Set up a coding agent — review", "Set up a coding agent", (r) => buildAgentScreen(r, { onFinished: noop, onCancel: noop }), "", async (t) => { await Bun.sleep(250); t.mockInput.pressEnter(); await t.flush(); });
 if (show("handoff")) await inDashboard("4. Where should it open? (running in iTerm2)", "Open Claude Code", (r) => buildHandoffScreen(r, {
   prepared: { target: { id: "claude-code", label: "Claude Code", command: "claude", cwd: "/repo", hint: "sign in when prompted." }, scriptPath: "/Users/andrewmaclean/GitHub/twilioworld-agentic-coding-toolkit/.toolkit/launch/claude-code.sh", command: "'…/claude-code.sh'" },
   terminal: { name: "iTerm2", windows: [{ kind: "iterm", label: "iTerm2", current: true }, { kind: "apple-terminal", label: "Terminal", current: false }] },

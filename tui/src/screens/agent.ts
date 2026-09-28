@@ -16,17 +16,30 @@ import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
 
-export function buildAgentScreen(
-  renderer: CliRenderer,
-  onFinished: (ok?: boolean) => void,
-  onCancel: () => void,
-  onLaunch: (target: LaunchTarget) => void = () => {},
+export interface AgentScreenOptions {
+  onFinished: (ok?: boolean) => void;
+  onCancel: () => void;
+  onLaunch?: (target: LaunchTarget) => void;
   /** Pi needs a local model; when none is downloaded, the caller shows the
    *  model-choice review instead of downloading the default silently. */
-  piNeedsModel: () => boolean = () => false,
-  onPiNeedsModel: () => void = () => {},
-): BoxRenderable {
-  const agentOptions = agentPickerOptions();
+  piNeedsModel?: () => boolean;
+  onPiNeedsModel?: () => void;
+  /** Agents found on this computer; enables the "All my agents" option. */
+  detectedAgents?: string[];
+  onAddToAll?: () => void;
+}
+
+export function buildAgentScreen(renderer: CliRenderer, opts: AgentScreenOptions): BoxRenderable {
+  const {
+    onFinished, onCancel, onLaunch = () => {}, piNeedsModel = () => false, onPiNeedsModel = () => {},
+    detectedAgents = [], onAddToAll,
+  } = opts;
+  const agentOptions = [
+    ...(detectedAgents.length && onAddToAll
+      ? [{ name: "All my agents", description: `add Twilio to ${detectedAgents.join(", ")} · installs nothing`, value: "__all__" }]
+      : []),
+    ...agentPickerOptions(),
+  ];
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "agent-screen",
     route: "Dashboard / Set up a coding agent",
@@ -83,6 +96,7 @@ export function buildAgentScreen(
   select.on(SelectRenderableEvents.ITEM_SELECTED, (_, option) => {
     if (!selectGuard.ready()) return;
     selectedAgent = option.value as string;
+    if (selectedAgent === "__all__") { onAddToAll?.(); return; }
     if (selectedAgent.startsWith("Pi") && piNeedsModel()) {
       onPiNeedsModel();
       return;

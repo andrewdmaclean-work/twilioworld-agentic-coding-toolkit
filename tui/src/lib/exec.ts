@@ -197,13 +197,20 @@ export function have(bin: string): boolean {
 /** Capture stdout of a quick command. Returns "" on failure.
  *  NOTE: synchronous — see have() above for why that matters. Use
  *  captureAsync() for anything on a polling/background path. */
-export function capture(command: string, args: string[], env?: NodeJS.ProcessEnv): string {
+export function capture(
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  opts: { cwd?: string; timeoutMs?: number } = {},
+): string {
   const resolved = commandForSpawn(command);
   if (!resolved) return "";
   try {
     const res = spawnSync("/bin/sh", ["-c", shCmd(resolved, args)], {
       encoding: "utf8",
       env: commandEnv(command, env),
+      cwd: opts.cwd,
+      timeout: opts.timeoutMs,
     });
     return (res.stdout ?? "").trim();
   } catch {

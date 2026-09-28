@@ -134,9 +134,11 @@ export function buildHandoffScreen(renderer: CliRenderer, opts: HandoffScreenOpt
     ...SELECT_STYLE,
   });
 
-  const currentWindow = opts.printOnly ? -1 : choices.findIndex((c) => c.name.startsWith("Open in a new ") && !c.name.includes("console"));
+  // "Open here" is the default everywhere: it works in every terminal
+  // (including editor terminals) and can't land behind another window.
+  // TOOLKIT_OPEN=window skips this screen for hosts who prefer windows.
   const copyIndex = choices.findIndex((c) => c.name === "Copy command");
-  select.setSelectedIndex(opts.printOnly ? copyIndex : Math.max(0, currentWindow));
+  select.setSelectedIndex(opts.printOnly ? copyIndex : 0);
 
   const guard = createInputGuard();
   select.on(SelectRenderableEvents.ITEM_SELECTED, (_, option) => {

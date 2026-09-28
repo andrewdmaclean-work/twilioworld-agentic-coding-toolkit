@@ -9,6 +9,7 @@ import { buildDashboard } from "../dashboard.ts";
 import { buildHandoffScreen } from "./handoff.ts";
 import { buildWelcomeScreen } from "./welcome.ts";
 import { buildLocalAiInstallScreen } from "./local-ai-install.ts";
+import { buildAddAllReviewScreen } from "./add-all-review.ts";
 import type { PreparedLaunch, TerminalInfo } from "../lib/terminal.ts";
 import { buildLogScreen } from "./log.ts";
 import { buildAgentScreen } from "./agent.ts";
@@ -66,7 +67,7 @@ test("Resources renders as a dedicated top-level route", async () => {
 test("coding-agent setup requires review before installation", async () => {
   const t = await createTestRenderer({ width: 90, height: 28 });
   activeRenderer = t;
-  const screen = buildAgentScreen(t.renderer, () => {}, () => {});
+  const screen = buildAgentScreen(t.renderer, { onFinished: () => {}, onCancel: () => {} });
   t.renderer.root.add(screen);
   await t.renderOnce();
   await Bun.sleep(250);
@@ -328,7 +329,7 @@ function handoffCallbacks() {
   };
 }
 
-test("handoff names every destination and defaults to the current terminal app", async () => {
+test("handoff names every destination and defaults to Open here", async () => {
   const t = await createTestRenderer({ width: 110, height: 30 });
   activeRenderer = t;
   const cb = handoffCallbacks();
@@ -347,8 +348,7 @@ test("handoff names every destination and defaults to the current terminal app",
   await t.flush();
   await Bun.sleep(10);
   await t.renderOnce();
-  expect(cb.calls).toEqual(["window:iTerm2"]);
-  expect(t.captureCharFrame()).toContain("Not seeing it?");
+  expect(cb.calls).toEqual(["here"]);
 });
 
 test("handoff explains why no window is offered and falls back to Open here", async () => {
@@ -394,4 +394,41 @@ test("dashboard footer keeps the latest activity visible", async () => {
   await t.renderOnce();
   expect(t.captureCharFrame()).toContain("● Claude Code opened in iTerm2 · 14:02");
   dash.dispose();
+});
+
+test("welcome recommends adding Twilio to agents already installed", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const chosen: string[] = [];
+  t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", detectedAgents: ["Claude Code", "Codex"], onChoose: (c) => chosen.push(c) }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Add Twilio to my coding agents  (recommended)");
+  expect(frame).toContain("found Claude Code, Codex");
+  expect(frame).toContain("Set up a specific agent");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(chosen).toEqual(["all"]);
+});
+
+test("add-all review lists what is written for each agent", async () => {
+  const t = await createTestRenderer({ width: 110, height: 28 });
+  activeRenderer = t;
+  let confirmed = false;
+  t.renderer.root.add(buildAddAllReviewScreen(t.renderer, {
+    plans: [{ name: "Claude Code", summary: "Twilio plugin + Docs (user scope)" }, { name: "Cursor", summary: "Skills via ~/.agents/skills + Docs in ~/.cursor/mcp.json" }],
+    skills: true,
+    onConfirm: () => { confirmed = true; },
+    onCancel: () => {},
+  }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Twilio Skills → ~/.agents/skills");
+  expect(frame).toContain("Claude Code  Twilio plugin + Docs (user scope)");
+  expect(frame).toContain("Add Twilio to these 2 agents");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(confirmed).toBe(true);
 });

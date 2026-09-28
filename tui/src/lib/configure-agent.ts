@@ -14,7 +14,9 @@ import { pathNodeVersion, supportsPiNode } from "./node-version.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { installLocalModel } from "./model-install.ts";
 import { getSelectedModel } from "./local-models.ts";
-import { installTwilioSkills } from "./skills.ts";
+import {
+  claudeDocs, claudeSkills, codexDocs, copilotCliInstalled, copilotDocs, cursorDocs, installAgentSkills, opencodeDocs,
+} from "./agent-wiring.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
 function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
@@ -45,10 +47,6 @@ async function installVia(opts: {
 /** Best-effort `<cmd> mcp add ...` — logged but never fatal: an agent's MCP
  *  subcommand syntax can shift between versions, and failing to wire an MCP
  *  server shouldn't block install + launch. */
-async function tryMcpAdd(command: string, args: string[], onLog: LogFn): Promise<void> {
-  const res = await runStreaming(command, args, { cwd: ROOT, onLog });
-  if (!res.ok) warn(`Could not run "${command} ${args.join(" ")}" — you can run it yourself later.`, onLog);
-}
 
 // ── Unified agent wiring ─────────────────────────────────────────────────
 // Every non-Pi agent (Claude Code, Codex, Cursor, OpenCode, GitHub Copilot)
@@ -63,8 +61,8 @@ async function tryMcpAdd(command: string, args: string[], onLog: LogFn): Promise
 // The only per-agent differences are DATA, captured in AgentSpec below:
 // the binary name, install sources, docs URL, and the exact MCP-wiring /
 // Skills steps (each CLI genuinely has different syntax — Claude has
-// plugins + `mcp add`, Codex has `mcp add` with `--url`, Cursor/Copilot
-// wire MCP interactively, etc). Pi is intentionally NOT in this table: it's
+// plugins + `mcp add`, Codex has `mcp add` with `--url`, Cursor and OpenCode
+// are config files — see lib/agent-wiring.ts). Pi is intentionally NOT in this table: it's
 // a local agent that needs the model and is prepared via preparePi().
 
 interface AgentSpec {
@@ -72,6 +70,8 @@ interface AgentSpec {
   label: string;
   /** Binary probed with have() and opened from the handoff screen. */
   bin: string;
+  /** Stricter install check when a same-named stub may be on PATH. */
+  installed?: () => boolean;
   /** Install sources for installVia() (brew→npm, first that works). */
   install: { brew?: string[]; npm?: string[] };
   /** Docs link shown if every install method fails. */
@@ -97,22 +97,6 @@ export function selectedAgentCapabilities(addons: Record<string, boolean>): Agen
   return { skills: addons.twilioSkills === true, docs: addons.docsMcp === true };
 }
 
-function ensureAgentSkills(onLog: LogFn): boolean {
-  if (!existsSync(SKILLS_DIR)) {
-    err("Twilio Skills are missing. Run git submodule update --init --recursive, then retry.", onLog);
-    return false;
-  }
-  const destination = join(homedir(), ".agents", "skills");
-  try {
-    installTwilioSkills(destination);
-  } catch (error) {
-    err(`Could not install Twilio Skills for this coding agent: ${(error as Error).message}`, onLog);
-    return false;
-  }
-  ok("Twilio Skills installed for coding agents", onLog);
-  return true;
-}
-
 /** Filename-safe id for a launch script, e.g. "GitHub Copilot CLI" → "github-copilot-cli". */
 export function launchId(label: string): string {
   return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
@@ -129,7 +113,7 @@ async function configureStandardAgent(
   onReady?: (target: LaunchTarget) => void,
 ): Promise<void> {
   // 1. Install (skip if already present, abort on failure).
-  if (have(spec.bin)) {
+  if (spec.installed ? spec.installed() : have(spec.bin)) {
     ok(`${spec.label} already installed  ${capture(spec.bin, ["--version"])}`, onLog);
   } else {
     warn(`${spec.label} not found — installing…`, onLog);
@@ -141,7 +125,7 @@ async function configureStandardAgent(
   // 2–3. Honor the toolkit configuration even though Skills and Docs MCP
   // are enabled by default. This also handles older/custom config files.
   if (capabilities.skills) {
-    if (!ensureAgentSkills(onLog)) { onDone(false); return; }
+    if (!installAgentSkills(onLog)) { onDone(false); return; }
     await spec.wireSkills?.(onLog);
   }
   else say("   Twilio Skills are disabled; skipping.", onLog);
@@ -269,8 +253,8 @@ export async function configureAgent(opts: {
         install: { brew: ["install", "anomalyco/tap/opencode"], npm: ["install", "-g", "opencode-ai"] },
         docsUrl: "https://opencode.ai/docs",
         firstRunHint: "run /connect to pick a model (Anthropic, OpenAI, or Zen).",
-        wireSkills: () => ok("Twilio Skills use the Agent Skills standard — OpenCode reads them from ~/.agents/skills.", onLog),
-        syncCapabilities: () => {},
+        wireSkills: (l) => ok("OpenCode reads Twilio Skills from ~/.agents/skills", l),
+        wireDocsMcp: async (l) => { await opencodeDocs(l); },
         launchEnv: (selected, l) => opencodeLaunchEnv(selected.docs, l),
       },
       capabilities, onLog, onDone, onReady,
@@ -285,15 +269,8 @@ export async function configureAgent(opts: {
         install: { brew: ["install", "--cask", "claude-code"], npm: ["install", "-g", "@anthropic-ai/claude-code"] },
         docsUrl: "https://code.claude.com/docs/en/quickstart",
         firstRunHint: "sign in when prompted.",
-        wireSkills: async (l) => {
-          say("   Installing the Twilio developer kit plugin…", l);
-          await tryMcpAdd("claude", ["plugin", "marketplace", "add", "https://github.com/twilio/ai"], l);
-          await tryMcpAdd("claude", ["plugin", "install", "twilio-developer-kit@twilio"], l);
-        },
-        wireDocsMcp: async (l) => {
-          say("   Adding the Docs MCP…", l);
-          await tryMcpAdd("claude", ["mcp", "add", "twilio-docs", "--transport", "http", DOCS_MCP_URL], l);
-        },
+        wireSkills: async (l) => { await claudeSkills(l); },
+        wireDocsMcp: async (l) => { await claudeDocs(l); },
       },
       capabilities, onLog, onDone, onReady,
     );
@@ -307,8 +284,8 @@ export async function configureAgent(opts: {
         install: { brew: ["install", "--cask", "cursor-cli"] },
         docsUrl: "https://cursor.com/docs/cli",
         firstRunHint: "sign in when prompted.",
-        wireSkills: (l) => { say("   In Cursor Composer or the CLI, install the plugin:", l); say("       /add-plugin twilio-developer-kit", l); },
-        wireDocsMcp: (l) => { say("   Add the Docs MCP under Cursor Settings > MCP:", l); say(`       type: http   url: ${DOCS_MCP_URL}`, l); },
+        wireSkills: (l) => ok("Cursor reads Twilio Skills from ~/.agents/skills", l),
+        wireDocsMcp: async (l) => { await cursorDocs(l); },
       },
       capabilities, onLog, onDone, onReady,
     );
@@ -322,12 +299,8 @@ export async function configureAgent(opts: {
         install: { brew: ["install", "codex"], npm: ["install", "-g", "@openai/codex"] },
         docsUrl: "https://developers.openai.com/codex/cli",
         firstRunHint: "sign in when prompted.",
-        wireSkills: (l) => {
-          say("   In Codex, open Plugins and install \"Twilio developer kit\" (Codex plugin", l);
-          say("   marketplaces aren't auto-wired by this toolkit yet).", l);
-          say("       /plugins", l);
-        },
-        wireDocsMcp: async (l) => { say("   Adding the Docs MCP…", l); await tryMcpAdd("codex", ["mcp", "add", "twilio-docs", "--url", DOCS_MCP_URL], l); },
+        wireSkills: (l) => ok("Codex reads Twilio Skills from ~/.agents/skills", l),
+        wireDocsMcp: async (l) => { await codexDocs(l); },
       },
       capabilities, onLog, onDone, onReady,
     );
@@ -341,9 +314,9 @@ export async function configureAgent(opts: {
         install: { brew: ["install", "--cask", "copilot-cli"], npm: ["install", "-g", "@github/copilot"] },
         docsUrl: "https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli",
         firstRunHint: "run /login to sign in.",
-        wireSkills: (l) => ok("Twilio Skills use the Agent Skills standard — Copilot CLI reads them from ~/.agents/skills.", l),
-        // Copilot manages MCP interactively via /mcp (no stable subcommand).
-        wireDocsMcp: (l) => { say("   Add the Docs MCP inside Copilot with the /mcp command:", l); say(`       name: twilio-docs   type: http   url: ${DOCS_MCP_URL}`, l); },
+        installed: copilotCliInstalled,
+        wireSkills: (l) => ok("Copilot CLI reads Twilio Skills from ~/.agents/skills", l),
+        wireDocsMcp: async (l) => { await copilotDocs(l); },
       },
       capabilities, onLog, onDone, onReady,
     );

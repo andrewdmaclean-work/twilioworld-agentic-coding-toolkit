@@ -87,15 +87,24 @@ Choose **Set up a coding agent**, review the action, and continue. The toolkit
 uses package-manager installers where available, configures Twilio knowledge,
 and then asks where to open the agent (see [Where things open](#where-things-open)).
 
-| Agent | Skills | Live Docs |
+Already have agents installed? Choose **All my agents** (or **Add Twilio to my
+coding agents** on first run). It adds Twilio Skills and live Docs to every
+agent it finds, for every project, without installing or opening anything.
+Re-running it is safe.
+
+| Agent | Skills | Live Docs (global) |
 | --- | --- | --- |
-| Claude Code | Twilio developer-kit plugin | Configured automatically |
-| Codex | Agent Skills / plugin guidance | Configured automatically |
-| Cursor | Plugin guidance | Manual MCP settings shown |
-| OpenCode | `~/.agents/skills` | Included in `opencode.json` |
-| GitHub Copilot CLI | `~/.agents/skills` | Interactive `/mcp` guidance |
+| Claude Code | Twilio developer-kit plugin | `claude mcp add --scope user` |
+| Codex | `~/.agents/skills` | `codex mcp add` → `~/.codex/config.toml` |
+| Cursor (editor + CLI) | `~/.agents/skills` | merged into `~/.cursor/mcp.json` |
+| OpenCode | `~/.agents/skills` | merged into `~/.config/opencode/opencode.json` |
+| GitHub Copilot CLI | `~/.agents/skills` | `copilot mcp add --transport http` |
 | Pi | Toolkit-managed skills directory | Toolkit-managed MCP adapter |
 | Other | Open Agent Skills instructions | Standard HTTP MCP endpoint shown |
+
+Config files are only merged when they are plain JSON; other servers and
+settings are kept. VS Code's Copilot Chat extension is not the Copilot CLI and
+is not configured.
 
 Manual Docs MCP endpoint:
 
