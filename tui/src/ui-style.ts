@@ -1,3 +1,4 @@
+import { StyledText, bold, fg, type TextChunk } from "@opentui/core";
 import { THEME } from "./theme.ts";
 
 export const SELECT_STYLE = {
@@ -44,4 +45,23 @@ export function wrapText(text: string, width: number): string {
     out.push(indent + line);
   }
   return out.join("\n");
+}
+
+/** Style detail-panel text so structure is visible at a glance:
+ *   - headings (unindented lines) → bold, CAPS, brand red
+ *   - rows ("  Label      value") → dim label, bright value (green when good)
+ *   - everything else → neutral body text */
+const GOOD_VALUE = /^(Running|Installed|Downloaded|Logged in|Online)\b/;
+
+export function styleDetail(text: string): StyledText {
+  const chunks: TextChunk[] = [];
+  const lines = text.split("\n");
+  lines.forEach((line, i) => {
+    const row = line.match(/^(  \S.*?\s{2,})(\S.*)$/);
+    if (line && !line.startsWith(" ")) chunks.push(fg(THEME.red)(bold(line.toUpperCase())));
+    else if (row) chunks.push(fg(THEME.dim2)(row[1]), fg(GOOD_VALUE.test(row[2]) ? THEME.green : THEME.white)(row[2]));
+    else chunks.push(fg(THEME.silver)(line));
+    if (i < lines.length - 1) chunks.push(fg(THEME.silver)("\n"));
+  });
+  return new StyledText(chunks);
 }

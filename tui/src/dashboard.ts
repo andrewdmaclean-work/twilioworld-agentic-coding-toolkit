@@ -14,7 +14,7 @@ import type { ToolkitStatus } from "./status.ts";
 import { buildRobotFace } from "./screens/robot-face.ts";
 import { buildInvadersScreen } from "./screens/invaders.ts";
 import { THEME } from "./theme.ts";
-import { SELECT_STYLE, shortcutBar, wrapText } from "./ui-style.ts";
+import { SELECT_STYLE, shortcutBar, styleDetail, wrapText } from "./ui-style.ts";
 import { detailFor, headlineText, nextMove, statusLines, visibleItems, type ItemId, type MenuItem } from "./dashboard-content.ts";
 
 const RED      = THEME.red;
@@ -282,7 +282,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
       detailText.content = "";
     } else {
       detailCol.title = ` ${item.label(s)} `;
-      detailText.content = wrapText(detailFor(item, s), detailContentWidth);
+      detailText.content = styleDetail(wrapText(detailFor(item, s), detailContentWidth));
     }
   }
 

@@ -248,7 +248,7 @@ test("dashboard renders the visual hierarchy at wide width", async () => {
   expect(frame).toContain("System status");
   expect(frame).toContain("Local chat");
   expect(frame).toContain("●  Local AI");
-  expect(frame).toContain("Overview");
+  expect(frame).toContain("OVERVIEW");
   expect(frame).toContain("╭───┴───╮");
   dashboard.dispose();
 });

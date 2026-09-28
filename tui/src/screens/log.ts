@@ -10,7 +10,10 @@
 import {
   BoxRenderable,
   ScrollBoxRenderable,
+  StyledText,
   TextRenderable,
+  bold,
+  fg,
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
@@ -121,10 +124,12 @@ export function buildLogScreen(
       }
     }
     lineCount++;
+    const wrapped = wrapText(line, Math.max(24, (scroll.width ?? renderer.width) - 8));
     scroll.content.add(
       new TextRenderable(renderer, {
         id: `log-line-${lineCount}`,
-        content: wrapText(line, Math.max(24, (scroll.width ?? renderer.width) - 8)),
+        // Section lines ("▶ [1/3] Twilio knowledge") read as headings.
+        content: line.startsWith("▶") ? new StyledText([fg(THEME.red)(bold(wrapped))]) : wrapped,
         fg: colorFor(line, stream),
       }),
     );
