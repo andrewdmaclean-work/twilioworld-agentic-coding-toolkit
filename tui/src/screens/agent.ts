@@ -8,6 +8,7 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { configureAgent } from "../lib/configure-agent.ts";
+import type { LaunchTarget } from "../lib/terminal.ts";
 import { agentPickerOptions } from "../lib/agents.ts";
 import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
 import { THEME } from "../theme.ts";
@@ -19,13 +20,14 @@ export function buildAgentScreen(
   renderer: CliRenderer,
   onFinished: (ok?: boolean) => void,
   onCancel: () => void,
+  onLaunch: (target: LaunchTarget) => void = () => {},
 ): BoxRenderable {
   const agentOptions = agentPickerOptions();
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "agent-screen",
     route: "Dashboard / Set up a coding agent",
     title: "Set up a coding agent",
-    subtitle: "Adds Twilio knowledge, then opens the agent in a new terminal. Missing CLIs may be installed.",
+    subtitle: "Adds Twilio knowledge, then you choose where the agent opens. Missing CLIs may be installed.",
     bodyTitle: "Choose an agent",
     footer: shortcutBar(["Esc", "dashboard"], ["Enter", "review"]),
   });
@@ -54,7 +56,7 @@ export function buildAgentScreen(
     flexShrink: 0,
     visible: false,
     options: [
-      { name: "Continue", description: "install if needed, add Twilio knowledge, and open a new terminal" },
+      { name: "Continue", description: "install if needed and add Twilio knowledge; you choose where it opens next" },
       { name: "Go back", description: "choose a different agent" },
     ],
     ...SELECT_STYLE,
@@ -74,8 +76,8 @@ export function buildAgentScreen(
     selectedAgent = option.value as string;
     select.visible = false;
     confirmLabel.content = selectedAgent.startsWith("Pi")
-      ? `Set up Pi? This may install Pi and download the selected local model, then opens a new terminal.`
-      : `Set up ${selectedAgent}? This may install its CLI and will open a new terminal window.`;
+      ? `Set up Pi? This may install Pi and download the selected local model.`
+      : `Set up ${selectedAgent}? This may install its CLI.`;
     confirmLabel.visible = true;
     confirmSelect.visible = true;
     confirmSelect.setSelectedIndex(1);
@@ -85,11 +87,19 @@ export function buildAgentScreen(
   confirmSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index) => {
     if (!confirmGuard.ready()) return;
     if (index !== 0 || !selectedAgent) { showAgentList(); return; }
+    let ready: LaunchTarget | null = null;
     const logScreen = buildLogScreen(
       renderer,
       `Set up coding agent — ${selectedAgent}`,
-      (onLog, onDone) => configureAgent({ agent: selectedAgent, onLog, onDone }),
-      (ok) => onFinished(ok),
+      (onLog, onDone) => {
+        ready = null;
+        return configureAgent({ agent: selectedAgent, onLog, onDone, onReady: (target) => { ready = target; } });
+      },
+      (ok) => {
+        if (ok && ready) onLaunch(ready);
+        else onFinished(ok);
+      },
+      { successAction: () => ready ? `choose where to open ${ready.label}` : undefined },
     );
     removeAllChildren(screen);
     screen.add(logScreen);

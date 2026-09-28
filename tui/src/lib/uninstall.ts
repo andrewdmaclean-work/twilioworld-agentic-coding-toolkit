@@ -3,7 +3,8 @@
 import { existsSync, readdirSync, rmSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { capture, have, killModelServer, runStreaming, type LogFn } from "./exec.ts";
+import { capture, have, runStreaming, type LogFn } from "./exec.ts";
+import { killModelServer } from "./daemons.ts";
 import {
   CONFIG_FILE,
   CONFIG_DIR,

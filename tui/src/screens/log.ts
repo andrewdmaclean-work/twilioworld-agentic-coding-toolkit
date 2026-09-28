@@ -69,7 +69,12 @@ export function buildLogScreen(
     onDone: (ok: boolean) => void,
   ) => void | Promise<void>,
   onFinished: (ok: boolean) => void,
+  opts: {
+    /** What Enter does after success, e.g. "choose where to open Pi". */
+    successAction?: () => string | undefined;
+  } = {},
 ): BoxRenderable {
+  const successFooter = () => shortcutBar(["D", "details"], ["Enter", opts.successAction?.() ?? "return"]);
   const { screen, body, footer } = buildEmbeddedRouteChrome(renderer, {
     id: "log-screen",
     route: "Dashboard / Task Log",
@@ -155,7 +160,7 @@ export function buildLogScreen(
     progress.content = ok ? `  ●  Task complete  ${elapsed}s` : `  !  Task failed  ${elapsed}s`;
     progress.fg = ok ? THEME.green : ERR_COLOR;
     footer.content = ok
-      ? shortcutBar(["D", "details"], ["Enter", "return"])
+      ? successFooter()
       : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]);
     footer.fg = ok ? THEME.green : ERR_COLOR;
     dismissGuard.arm();
@@ -216,7 +221,7 @@ export function buildLogScreen(
       scroll.visible = detailsVisible;
       timeline.visible = !detailsVisible;
       footer.content = taskDone
-        ? (taskOk ? shortcutBar(["D", "details"], ["Enter", "return"]) : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]))
+        ? (taskOk ? successFooter() : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]))
         : (detailsVisible ? shortcutBar(["D", "hide details"]) : shortcutBar(["D", "show details"]));
       return;
     }

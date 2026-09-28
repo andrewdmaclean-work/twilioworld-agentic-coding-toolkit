@@ -5,9 +5,11 @@
 import { existsSync, readFileSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { capture, have, openInNewWindow, runStreaming, type LogFn } from "./exec.ts";
+import { capture, have, runStreaming, type LogFn } from "./exec.ts";
+import type { LaunchTarget } from "./terminal.ts";
 import { DOCS_MCP_URL, MODEL_SERVER_BASE_URL, PI_AGENT_PKG, ROOT, SKILLS_DIR } from "./constants.ts";
-import { launchPi, localModelAvailable } from "./pi.ts";
+import { localModelAvailable, preparePi } from "./pi.ts";
+import { MODEL_CTX_SIZE } from "./model.ts";
 import { pathNodeVersion, supportsPiNode } from "./node-version.ts";
 import { readConfig, writeConfig } from "./config.ts";
 import { installLocalModel } from "./model-install.ts";
@@ -56,26 +58,28 @@ async function tryMcpAdd(command: string, args: string[], onLog: LogFn): Promise
 //   1. install the CLI (installVia brew→npm), abort on failure
 //   2. wire Twilio Skills
 //   3. wire the Docs MCP
-//   4. launch the CLI in a new terminal window
+//   4. hand a LaunchTarget back so the user picks where it opens
 //
 // The only per-agent differences are DATA, captured in AgentSpec below:
 // the binary name, install sources, docs URL, and the exact MCP-wiring /
 // Skills steps (each CLI genuinely has different syntax — Claude has
 // plugins + `mcp add`, Codex has `mcp add` with `--url`, Cursor/Copilot
 // wire MCP interactively, etc). Pi is intentionally NOT in this table: it's
-// a local agent that needs the model and launches via launchPi().
+// a local agent that needs the model and is prepared via preparePi().
 
 interface AgentSpec {
   /** Display name used in log messages. */
   label: string;
-  /** Binary probed with have() and launched with openInNewWindow(). */
+  /** Binary probed with have() and opened from the handoff screen. */
   bin: string;
   /** Install sources for installVia() (brew→npm, first that works). */
   install: { brew?: string[]; npm?: string[] };
   /** Docs link shown if every install method fails. */
   docsUrl: string;
-  /** First-run note appended to the successful-launch message (e.g. sign in / login). */
+  /** First-run note shown on the handoff screen (e.g. sign in / login). */
   firstRunHint: string;
+  /** Extra environment for the launched agent (e.g. config overrides). */
+  launchEnv?: (capabilities: AgentCapabilities, onLog: LogFn) => NodeJS.ProcessEnv | undefined;
   /** Wire Twilio Skills into this agent (best-effort; may just print steps). */
   wireSkills?: (onLog: LogFn) => Promise<void> | void;
   /** Wire the Docs MCP (best-effort; may just print steps). */
@@ -109,12 +113,20 @@ function ensureAgentSkills(onLog: LogFn): boolean {
   return true;
 }
 
-/** Runs the identical install → wire → launch sequence for any AgentSpec. */
+/** Filename-safe id for a launch script, e.g. "GitHub Copilot CLI" → "github-copilot-cli". */
+export function launchId(label: string): string {
+  return label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
+/** Runs the identical install → wire → ready sequence for any AgentSpec.
+ *  Opening the agent is the caller's job (the handoff screen), so the user
+ *  always chooses — and sees — where it opens. */
 async function configureStandardAgent(
   spec: AgentSpec,
   capabilities: AgentCapabilities,
   onLog: LogFn,
   onDone: (ok: boolean) => void,
+  onReady?: (target: LaunchTarget) => void,
 ): Promise<void> {
   // 1. Install (skip if already present, abort on failure).
   if (have(spec.bin)) {
@@ -137,60 +149,76 @@ async function configureStandardAgent(
   else if (capabilities.docs) await spec.wireDocsMcp?.(onLog);
   else say("   Live Docs search is disabled; skipping.", onLog);
 
-  // 5. Launch in a new terminal window.
+  // 4. Ready — hand the launch back to the caller.
   say("", onLog);
-  const launch = openInNewWindow(spec.bin, [], { cwd: ROOT });
-  if (launch.ok) ok(`${spec.label} opened in a new terminal window — ${spec.firstRunHint}`, onLog);
-  else { err(launch.error ?? "Could not open a new terminal window.", onLog); say(`   Run it yourself: cd ${ROOT} && ${spec.bin}`, onLog); }
-
-  onDone(launch.ok);
+  ok(`${spec.label} is ready to open`, onLog);
+  onReady?.({
+    id: launchId(spec.label),
+    label: spec.label,
+    command: spec.bin,
+    cwd: ROOT,
+    env: spec.launchEnv?.(capabilities, onLog),
+    hint: spec.firstRunHint,
+  });
+  onDone(true);
 }
 
 
 // opencode.json is a tracked file, committed with sensible static defaults
-// (twilio-docs on, matching the toolkit's own defaults). This never writes
-// to it; if the user's add-on choices
-// differ from those committed defaults, it prints an OPENCODE_CONFIG_CONTENT
-// override instead — the officially supported "final local-scope merge"
-// env var — so local machine state never lands in a tracked file.
-function configureOpencodeMcpSelection(docsEnabled: boolean, onLog: LogFn) {
-  const ocJson = join(ROOT, "opencode.json");
-  if (!existsSync(ocJson)) { warn("opencode.json not found — skipping MCP check", onLog); return; }
+// (twilio-docs on, Gemma as the local model). This never writes to it; when
+// the user's choices differ — Docs disabled, or a different local model —
+// the difference is passed as OPENCODE_CONFIG_CONTENT (OpenCode's supported
+// "final local-scope merge" env var) in OpenCode's launch script, so local
+// machine state never lands in a tracked file and nothing needs exporting.
+export function opencodeOverride(
+  committed: { mcp?: Record<string, { enabled?: boolean }>; provider?: { llamafile?: { models?: Record<string, unknown> } } },
+  docsEnabled: boolean,
+  model: { slug: string; name: string },
+  ctxSize = Number(MODEL_CTX_SIZE),
+): Record<string, unknown> | null {
+  const override: Record<string, unknown> = {};
+  const mcpDrift = (committed.mcp?.["twilio-docs"]?.enabled ?? false) !== docsEnabled;
+  if (mcpDrift) override.mcp = { "twilio-docs": { enabled: docsEnabled } };
+  if (!committed.provider?.llamafile?.models?.[model.slug]) {
+    override.provider = {
+      llamafile: {
+        name: `${model.name} (local)`,
+        models: { [model.slug]: { name: `${model.name} (local)`, limit: { context: ctxSize, output: 4096 }, tools: true } },
+      },
+    };
+  }
+  return Object.keys(override).length ? { $schema: "https://opencode.ai/config.json", ...override } : null;
+}
 
-  let committed: { mcp?: Record<string, { enabled?: boolean }> } = {};
+function opencodeLaunchEnv(docsEnabled: boolean, onLog: LogFn): NodeJS.ProcessEnv | undefined {
+  const ocJson = join(ROOT, "opencode.json");
+  if (!existsSync(ocJson)) { warn("opencode.json not found — skipping MCP check", onLog); return undefined; }
+
+  let committed: Parameters<typeof opencodeOverride>[0] = {};
   try {
     committed = JSON.parse(readFileSync(ocJson, "utf8"));
   } catch (e) {
     warn(`Could not read opencode.json: ${e}`, onLog);
-    return;
+    return undefined;
   }
 
-  const wanted: Record<string, boolean> = { "twilio-docs": docsEnabled };
-  const drift = Object.entries(wanted).filter(
-    ([name, on]) => (committed.mcp?.[name]?.enabled ?? false) !== on,
-  );
-
-  if (!drift.length) {
-    ok("opencode.json's committed MCP defaults already match your selected choices", onLog);
-    return;
+  const override = opencodeOverride(committed, docsEnabled, getSelectedModel());
+  if (!override) {
+    ok("opencode.json already matches your selected choices", onLog);
+    return undefined;
   }
-
-  const override = {
-    $schema: "https://opencode.ai/config.json",
-    mcp: Object.fromEntries(drift.map(([name, on]) => [name, { enabled: on }])),
-  };
-  warn(`Your add-on choices differ from opencode.json's committed defaults (${drift.map(([n]) => n).join(", ")}).`, onLog);
-  say("   opencode.json is a tracked file — this toolkit never modifies it.", onLog);
-  say("   Override at launch time instead:", onLog);
-  say(`       export OPENCODE_CONFIG_CONTENT='${JSON.stringify(override)}'`, onLog);
+  ok("Your choices differ from opencode.json's committed defaults — applied at launch via OPENCODE_CONFIG_CONTENT (opencode.json is never modified)", onLog);
+  return { OPENCODE_CONFIG_CONTENT: JSON.stringify(override) };
 }
 
 export async function configureAgent(opts: {
   agent: string;
   onLog: LogFn;
   onDone: (ok: boolean) => void;
+  /** Receives what to open once setup succeeds (not called for "Other"). */
+  onReady?: (target: LaunchTarget) => void;
 }): Promise<void> {
-  const { agent, onLog, onDone } = opts;
+  const { agent, onLog, onDone, onReady } = opts;
   const capabilities = selectedAgentCapabilities(readConfig().addons);
 
   if (agent.startsWith("Pi")) {
@@ -226,12 +254,11 @@ export async function configureAgent(opts: {
       writeConfig({ ...config.addons, localGemma: true }, config.settings);
     }
 
-    // Capabilities + launch — shared with the menu's own Pi path
-    // (lib/pi.ts) so there's exactly one place that knows how to wire
-    // Skills/MCP/model config and open Pi in a new terminal window.
-    const launch = await launchPi({ onLog });
-    warn("Small local models work best with a focused tool set. For heavier work, switch to a cloud /model inside Pi.", onLog);
-    onDone(launch.ok);
+    // Capabilities + model server — lib/pi.ts is the one place that knows
+    // how to wire Skills/MCP/model config for Pi.
+    const target = await preparePi({ onLog });
+    if (target) onReady?.(target);
+    onDone(Boolean(target));
     return;
 
   } else if (agent === "OpenCode") {
@@ -243,11 +270,12 @@ export async function configureAgent(opts: {
         bin: "opencode",
         install: { brew: ["install", "anomalyco/tap/opencode"], npm: ["install", "-g", "opencode-ai"] },
         docsUrl: "https://opencode.ai/docs",
-        firstRunHint: "run /connect there to pick a model (Anthropic, OpenAI, or Zen).",
+        firstRunHint: "run /connect to pick a model (Anthropic, OpenAI, or Zen).",
         wireSkills: () => ok("Twilio Skills use the Agent Skills standard — OpenCode reads them from ~/.agents/skills.", onLog),
-        syncCapabilities: (selected, l) => configureOpencodeMcpSelection(selected.docs, l),
+        syncCapabilities: () => {},
+        launchEnv: (selected, l) => opencodeLaunchEnv(selected.docs, l),
       },
-      capabilities, onLog, onDone,
+      capabilities, onLog, onDone, onReady,
     );
     return;
 
@@ -258,7 +286,7 @@ export async function configureAgent(opts: {
         bin: "claude",
         install: { brew: ["install", "--cask", "claude-code"], npm: ["install", "-g", "@anthropic-ai/claude-code"] },
         docsUrl: "https://code.claude.com/docs/en/quickstart",
-        firstRunHint: "sign in there if it's your first run.",
+        firstRunHint: "sign in when prompted.",
         wireSkills: async (l) => {
           say("   Installing the Twilio developer kit plugin…", l);
           await tryMcpAdd("claude", ["plugin", "marketplace", "add", "https://github.com/twilio/ai"], l);
@@ -269,7 +297,7 @@ export async function configureAgent(opts: {
           await tryMcpAdd("claude", ["mcp", "add", "twilio-docs", "--transport", "http", DOCS_MCP_URL], l);
         },
       },
-      capabilities, onLog, onDone,
+      capabilities, onLog, onDone, onReady,
     );
     return;
 
@@ -280,11 +308,11 @@ export async function configureAgent(opts: {
         bin: "cursor-agent",
         install: { brew: ["install", "--cask", "cursor-cli"] },
         docsUrl: "https://cursor.com/docs/cli",
-        firstRunHint: "sign in there if it's your first run.",
+        firstRunHint: "sign in when prompted.",
         wireSkills: (l) => { say("   In Cursor Composer or the CLI, install the plugin:", l); say("       /add-plugin twilio-developer-kit", l); },
         wireDocsMcp: (l) => { say("   Add the Docs MCP under Cursor Settings > MCP:", l); say(`       type: http   url: ${DOCS_MCP_URL}`, l); },
       },
-      capabilities, onLog, onDone,
+      capabilities, onLog, onDone, onReady,
     );
     return;
 
@@ -295,7 +323,7 @@ export async function configureAgent(opts: {
         bin: "codex",
         install: { brew: ["install", "codex"], npm: ["install", "-g", "@openai/codex"] },
         docsUrl: "https://developers.openai.com/codex/cli",
-        firstRunHint: "sign in there if it's your first run.",
+        firstRunHint: "sign in when prompted.",
         wireSkills: (l) => {
           say("   In Codex, open Plugins and install \"Twilio developer kit\" (Codex plugin", l);
           say("   marketplaces aren't auto-wired by this toolkit yet).", l);
@@ -303,7 +331,7 @@ export async function configureAgent(opts: {
         },
         wireDocsMcp: async (l) => { say("   Adding the Docs MCP…", l); await tryMcpAdd("codex", ["mcp", "add", "twilio-docs", "--url", DOCS_MCP_URL], l); },
       },
-      capabilities, onLog, onDone,
+      capabilities, onLog, onDone, onReady,
     );
     return;
 
@@ -314,12 +342,12 @@ export async function configureAgent(opts: {
         bin: "copilot",
         install: { brew: ["install", "--cask", "copilot-cli"], npm: ["install", "-g", "@github/copilot"] },
         docsUrl: "https://docs.github.com/copilot/how-tos/set-up/install-copilot-cli",
-        firstRunHint: "run /login there if it's your first run.",
+        firstRunHint: "run /login to sign in.",
         wireSkills: (l) => ok("Twilio Skills use the Agent Skills standard — Copilot CLI reads them from ~/.agents/skills.", l),
         // Copilot manages MCP interactively via /mcp (no stable subcommand).
         wireDocsMcp: (l) => { say("   Add the Docs MCP inside Copilot with the /mcp command:", l); say(`       name: twilio-docs   type: http   url: ${DOCS_MCP_URL}`, l); },
       },
-      capabilities, onLog, onDone,
+      capabilities, onLog, onDone, onReady,
     );
     return;
 

@@ -1,11 +1,12 @@
-// lib/pi.ts — Pi launch logic.
-// Installs Pi capabilities (MCP, models, skills) then opens Pi in a
-// brand-new terminal window, fully detached from the TUI. The dashboard
-// keeps running normally — no suspend/resume needed.
+// lib/pi.ts — Pi preparation.
+// Installs Pi capabilities (MCP, models, skills) and starts local AI, then
+// returns a LaunchTarget; the handoff screen decides where Pi opens.
 
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
-import { capture, fileExecutable, have, openInNewWindow, runStreaming, startDaemon, type LogFn, type NewWindowResult } from "./exec.ts";
+import { capture, fileExecutable, have, runStreaming, type LogFn } from "./exec.ts";
+import { startDaemon } from "./daemons.ts";
+import type { LaunchTarget } from "./terminal.ts";
 import { addonEnabled, modelReasoningMode, thinkingVisible } from "./config.ts";
 import { writePiDisplaySettings } from "./pi-settings.ts";
 import {
@@ -84,15 +85,14 @@ export function checkPiReadiness(): PiReadiness {
   return { ok: true };
 }
 
-/** Install Pi capabilities then open Pi in a new terminal window.
- *  Returns once the window has been launched (or failed to launch) —
- *  does not wait for Pi itself to exit. */
-export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult> {
+/** Install Pi capabilities and start local AI, then return a launch target
+ *  for the handoff screen (null on failure — the reason is logged). */
+export async function preparePi(opts: { onLog: LogFn }): Promise<LaunchTarget | null> {
   const { onLog } = opts;
   const readiness = checkPiReadiness();
   if (!readiness.ok) {
     onLog(`✗ ${readiness.reason}`, "stderr");
-    return { ok: false, error: readiness.reason };
+    return null;
   }
 
   const piDir = PI_AGENT_DIR;
@@ -121,7 +121,7 @@ export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult>
       installTwilioSkills(piSkillsDir, true);
     } catch (error) {
       onLog(`✗ Could not install Twilio Skills for Pi: ${(error as Error).message}`, "stderr");
-      return { ok: false, error: (error as Error).message };
+      return null;
     }
   } else if (existsSync(piSkillsDir)) {
     rmSync(piSkillsDir, { recursive: true, force: true });
@@ -141,7 +141,7 @@ export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult>
     });
     if (!ready) {
       onLog(`✗ Local AI did not respond after 90s. Logs: ${MODEL_SERVER_LOG}`, "stderr");
-      return { ok: false, error: `Local AI did not respond after 90s. See ${MODEL_SERVER_LOG}` };
+      return null;
     } else {
       onLog(`✓ Local AI ready on :${MODEL_SERVER_PORT}`, "stdout");
     }
@@ -164,14 +164,14 @@ export async function launchPi(opts: { onLog: LogFn }): Promise<NewWindowResult>
     piArgs.push("--skill", piSkillsDir);
   }
 
-  const result = openInNewWindow("pi", piArgs, {
+  onLog("✓ Pi is ready", "stdout");
+  return {
+    id: "pi",
+    label: "Pi",
+    command: "pi",
+    args: piArgs,
     cwd: ROOT,
-    env: { ...process.env, PI_CODING_AGENT_DIR: piDir },
-  });
-  if (result.ok) {
-    onLog("✓ Pi opened in a new terminal window", "stdout");
-  } else {
-    onLog(`✗ ${result.error}`, "stderr");
-  }
-  return result;
+    env: { PI_CODING_AGENT_DIR: piDir },
+    hint: "small local models work best with a focused tool set; switch to a cloud /model inside Pi for heavier work.",
+  };
 }

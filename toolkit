@@ -9,6 +9,7 @@ CONFIG_DIR="$ROOT/.toolkit"
 TOOLCHAINS_DIR="$CONFIG_DIR/toolchains"
 BUN_INSTALL="$TOOLCHAINS_DIR/bun"
 BUN_BIN="$BUN_INSTALL/bin/bun"
+BUN_VERSION="1.3.3"
 NODE_VERSION="${TOOLKIT_NODE_VERSION:-22.19.0}"
 NODE_HOME="$TOOLCHAINS_DIR/node-v22"
 NODE_BIN="$NODE_HOME/bin/node"
@@ -99,18 +100,23 @@ run_doctor() {
 
 open_in_terminal() {
   local app="$1"
+  local launcher="$ROOT/toolkit"
 
   case "$app" in
     iTerm)
-      osascript <<APPLESCRIPT
-tell application "iTerm"
-  activate
-  create window with default profile command "$ROOT/toolkit"
-end tell
+      # Pass the path as an argument rather than interpolating it into the
+      # AppleScript source, so spaces and quotes in the path stay intact.
+      osascript - "$launcher" <<'APPLESCRIPT'
+on run argv
+  tell application "iTerm"
+    activate
+    create window with default profile command (quoted form of item 1 of argv)
+  end tell
+end run
 APPLESCRIPT
       ;;
     Ghostty)
-      open -a Ghostty --args --command="$ROOT/toolkit"
+      open -na Ghostty --args --command="$(printf '%q' "$launcher")"
       ;;
     Warp)
       open -a Warp "$ROOT"
@@ -124,13 +130,13 @@ APPLESCRIPT
       ;;
     Alacritty)
       # Alacritty is not AppleScript-able; launch via open with --command
-      open -a Alacritty --args --command "$ROOT/toolkit"
+      open -na Alacritty --args --command "$launcher"
       ;;
     Terminal|*)
       # Terminal.app via a .command file (most reliable across macOS versions)
       local script
       script="$(mktemp "${TMPDIR:-/tmp}/twilioworld-open.XXXXXX.command")"
-      printf '#!/bin/sh\ncd %s\nexec %s\n' "$ROOT" "$ROOT/toolkit" > "$script"
+      printf '#!/bin/sh\ncd %q\nexec %q\n' "$ROOT" "$launcher" > "$script"
       chmod +x "$script"
       open -a Terminal "$script"
       ;;
@@ -176,6 +182,13 @@ case "${1:-}" in
     echo "  --alacritty  open in a new Alacritty window"
     echo "  --terminal   open in a new Terminal.app window"
     echo "  --doctor     check prerequisites"
+    echo
+    echo "Environment:"
+    echo "  TOOLKIT_OPEN=ask|here|window|print"
+    echo "               how agents, Pi, Dev Phone, and the Twilio CLI open."
+    echo "               ask (default) shows a choice each time; here takes over"
+    echo "               this terminal; window opens a new window in the detected"
+    echo "               terminal app; print only shows the command to run."
     exit 0
     ;;
 esac
@@ -204,6 +217,53 @@ platform_arch() {
   esac
 }
 
+# Pinned SHA-256 digests from the official release SHASUMS256.txt files.
+# Bump the version and these digests together.
+bun_sha256() {
+  case "$1" in
+    bun-darwin-aarch64) echo "f50f5cc767c3882c46675fbe07e0b7b1df71a73ce544aadb537ad9261af00bb1" ;;
+    bun-darwin-x64)     echo "fdaf5e3c91de2f2a8c83e80a125c5111d476e5f7575b2747d71bc51d2c920bd4" ;;
+    bun-linux-aarch64)  echo "41b9f4f25256db897c2c135320e4f96c373e20ae6f06d8015187dac83591efc8" ;;
+    bun-linux-x64)      echo "f5c546736f955141459de231167b6fdf7b01418e8be3609f2cde9dfe46a93a3d" ;;
+  esac
+}
+
+node_sha256() {
+  [[ "$NODE_VERSION" == "22.19.0" ]] || return 0
+  case "$1" in
+    darwin-arm64) echo "1c3a9e78da501bbc1f0c99fbbb69bb7c722bc7a9bf30128b21ea502f3905892a" ;;
+    darwin-x64)   echo "41796082f45db51738d1902cae84fa4f699ff6d2550321361424e8bfe6ea1939" ;;
+    linux-arm64)  echo "0b2d9f564b6594222a62c82e1df2efe119dd4a4aff29644f4dd325bf360b6bcc" ;;
+    linux-x64)    echo "c0649af18e6a24f6fe5535a3e86b341dd49a8e71117c8b68bde973ef834f16f2" ;;
+  esac
+}
+
+file_sha256() {
+  if command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | awk '{print $1}'
+  else
+    sha256sum "$1" | awk '{print $1}'
+  fi
+}
+
+# verify_download FILE EXPECTED_SHA [SHASUMS_URL NAME]
+# Uses the pinned digest when there is one; otherwise (a custom
+# TOOLKIT_NODE_VERSION) falls back to the release's published SHASUMS256.txt.
+verify_download() {
+  local file="$1" expected="$2" sums_url="${3:-}" name="${4:-}" actual
+  if [[ -z "$expected" && -n "$sums_url" ]]; then
+    expected="$(curl -fsSL "$sums_url" | awk -v n="$name" '$2 == n {print $1}')"
+  fi
+  [[ -n "$expected" ]] || { echo "No checksum available for $(basename "$file")." >&2; return 1; }
+  actual="$(file_sha256 "$file")"
+  if [[ "$actual" != "$expected" ]]; then
+    echo "Checksum mismatch for $(basename "$file")." >&2
+    echo "  expected $expected" >&2
+    echo "  actual   $actual" >&2
+    return 1
+  fi
+}
+
 ensure_project_bun() {
   [[ -x "$BUN_BIN" ]] && return 0
   command -v curl >/dev/null 2>&1 || { echo "curl is required to install project-local Bun." >&2; return 1; }
@@ -213,11 +273,13 @@ ensure_project_bun() {
   read -r bun_target node_target < <(platform_arch)
   [[ "$bun_target" != "unsupported" ]] || { echo "Unsupported platform for Bun: $(uname -s) $(uname -m)" >&2; return 1; }
 
-  echo "Installing project-local Bun into $BUN_INSTALL..."
+  echo "Installing project-local Bun $BUN_VERSION into $BUN_INSTALL..."
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/twilioworld-bun.XXXXXX")"
   zip="$tmp/bun.zip"
-  curl -fsSL "https://github.com/oven-sh/bun/releases/latest/download/${bun_target}.zip" -o "$zip" \
+  curl -fsSL "https://github.com/oven-sh/bun/releases/download/bun-v${BUN_VERSION}/${bun_target}.zip" -o "$zip" \
     || { echo "Bun download failed." >&2; rm -rf "$tmp"; return 1; }
+  verify_download "$zip" "$(bun_sha256 "$bun_target")" \
+    || { echo "Refusing to install an unverified Bun." >&2; rm -rf "$tmp"; return 1; }
   unzip -q "$zip" -d "$tmp" \
     || { echo "Bun extraction failed." >&2; rm -rf "$tmp"; return 1; }
   mkdir -p "$BUN_INSTALL/bin"
@@ -232,15 +294,18 @@ ensure_project_node() {
   command -v curl >/dev/null 2>&1 || { echo "curl is required to install project-local Node." >&2; return 1; }
   command -v tar >/dev/null 2>&1 || { echo "tar is required to install project-local Node." >&2; return 1; }
 
-  local bun_target node_target tmp archive
+  local bun_target node_target tmp archive name
   read -r bun_target node_target < <(platform_arch)
   [[ "$node_target" != "unsupported" ]] || { echo "Unsupported platform for Node: $(uname -s) $(uname -m)" >&2; return 1; }
 
   echo "Installing project-local Node $NODE_VERSION into $NODE_HOME..."
   tmp="$(mktemp -d "${TMPDIR:-/tmp}/twilioworld-node.XXXXXX")"
-  archive="$tmp/node.tar.xz"
-  curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/node-v${NODE_VERSION}-${node_target}.tar.xz" -o "$archive" \
+  name="node-v${NODE_VERSION}-${node_target}.tar.xz"
+  archive="$tmp/$name"
+  curl -fsSL "https://nodejs.org/dist/v${NODE_VERSION}/${name}" -o "$archive" \
     || { echo "Node download failed." >&2; rm -rf "$tmp"; return 1; }
+  verify_download "$archive" "$(node_sha256 "$node_target")" "https://nodejs.org/dist/v${NODE_VERSION}/SHASUMS256.txt" "$name" \
+    || { echo "Refusing to install an unverified Node." >&2; rm -rf "$tmp"; return 1; }
   rm -rf "$NODE_HOME"
   mkdir -p "$NODE_HOME"
   tar -xJf "$archive" -C "$NODE_HOME" --strip-components=1 \
@@ -255,6 +320,12 @@ if [[ "${TOOLKIT_TUI_SMOKE:-}" != "1" ]]; then
 fi
 
 cd "$ROOT/tui"
-[[ -d node_modules ]] || "$BUN_BIN" install
+# Reinstall whenever bun.lock changes (e.g. after git pull), not only when
+# node_modules is missing, so dependencies never silently go stale.
+LOCK_STAMP="node_modules/.toolkit-lock-stamp"
+if [[ ! -f "$LOCK_STAMP" || bun.lock -nt "$LOCK_STAMP" ]]; then
+  "$BUN_BIN" install --frozen-lockfile || { echo "Dependency install failed." >&2; exit 1; }
+  touch "$LOCK_STAMP"
+fi
 
 exec "$BUN_BIN" run src/index.ts "$@"

@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test";
 import { LLAMAFILE_DEST } from "./constants.ts";
-import { daemonCommandMatches, legacyModelCommandMatches, llamaWebUiUrl } from "./exec.ts";
+import { daemonCommandMatches, legacyModelCommandMatches } from "./daemons.ts";
+import { llamaWebUiUrl } from "./terminal.ts";
 
 test("daemon ownership requires the expected executable or script", () => {
   expect(daemonCommandMatches("/repo/tools/llamafile --server", ["/repo/tools/llamafile"])).toBe(true);

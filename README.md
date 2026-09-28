@@ -51,7 +51,7 @@ Live Docs search is remote but read-only and does not require credentials.
 
 The main menu is ordered around common tasks:
 
-1. **Set up a coding agent** — add Twilio Skills and live Docs, then launch it
+1. **Set up a coding agent** — add Twilio Skills and live Docs, then open it
 2. **Local chat** — choose the simple browser interface or Pi
 3. **Dev Phone** — install or open the browser test phone
 4. **Twilio CLI** — install, sign in, switch account, or open an isolated terminal
@@ -61,11 +61,33 @@ The main menu is ordered around common tasks:
 Every action shows a summary before potentially destructive work. Long-running
 tasks have progress, detailed output, failure recovery, and retry controls.
 
+### Where things open
+
+Nothing opens without telling you where. When an agent, Pi, Dev Phone, or the
+Twilio CLI is ready, the toolkit asks:
+
+- **Open here** — runs in this terminal; you return to the dashboard when it exits.
+- **Open in a new _\<app\>_ window** — offered when the toolkit can open a window
+  in the app you're using (iTerm2, Terminal, WezTerm, or a Linux terminal
+  emulator). Other apps are labeled as separate apps.
+- **Copy command** — copies a script under `.toolkit/launch/` that you can run
+  in any terminal, with the same toolkit settings.
+
+The latest thing that opened, and where, stays in the dashboard footer. Over
+SSH, new windows are never offered because they would appear on another
+display. Workshop hosts can preset one behavior for everyone:
+
+```bash
+TOOLKIT_OPEN=here ./toolkit     # always open in this terminal
+TOOLKIT_OPEN=window ./toolkit   # new window in the detected app when possible
+TOOLKIT_OPEN=print ./toolkit    # only show the command to run
+```
+
 ## Coding-agent setup
 
 Choose **Set up a coding agent**, review the action, and continue. The toolkit
 uses package-manager installers where available, configures Twilio knowledge,
-and opens the agent in a new terminal window.
+and then asks where to open the agent (see [Where things open](#where-things-open)).
 
 | Agent | Skills | Live Docs |
 | --- | --- | --- |
@@ -119,6 +141,10 @@ Under **Settings → Manage local AI** you can:
 - stop the local service; or
 - remove downloaded model files.
 
+Local AI keeps running in the background after you open it, so browser chat
+keeps working. When you quit the dashboard while it is running, the toolkit
+asks whether to stop it, and it prints a reminder if you leave it running.
+
 Set a different port or context size before launching:
 
 ```bash
@@ -141,6 +167,7 @@ live inside this repository and do not modify your normal system CLI profile.
 | Local models and logs | `models/` |
 | Local AI runtimes | `tools/llamafile*` |
 | Pi configuration | `.toolkit/pi-agent/` |
+| Launch scripts for agents, Pi, Dev Phone, and the CLI | `.toolkit/launch/` |
 | Globally installed Twilio Skills | `~/.agents/skills/` |
 
 Runtime state, credentials, models, logs, and generated configuration are
@@ -155,12 +182,13 @@ removals, or run the standalone guided uninstaller:
 
 | Platform | Status |
 | --- | --- |
-| macOS arm64/x64 | Supported; multiple terminal apps are detected |
+| macOS arm64/x64 | Supported; new windows open in iTerm2, Terminal, or WezTerm |
 | Linux arm64/x64 | Supported; requires a compatible graphical terminal for new-window actions |
 | Windows | Native launch is not currently supported; WSL is not yet verified |
 
 Host requirements are `bash`, `git`, `curl`, and standard archive tools. The
-toolkit installs project-local Bun and Node runtimes when needed.
+toolkit installs pinned, checksum-verified project-local Bun and Node runtimes
+when needed.
 
 ## Development
 
@@ -188,8 +216,11 @@ development workflow and [SECURITY.md](SECURITY.md) for reporting guidance.
   Settings, and retry.
 - **An agent did not configure:** review the task details; the toolkit prints
   the agent-specific manual step when its CLI has no stable configuration API.
-- **A terminal window did not open:** launch the agent or Twilio CLI manually
-  from this repository so it inherits the toolkit's local paths.
+- **A terminal window did not open:** choose **Open here**, or **Copy command**
+  and run the `.toolkit/launch/…` script in any terminal. It carries the
+  toolkit's local paths and settings. If iTerm2 reports "Not authorized to send
+  Apple events", allow the toolkit's terminal under System Settings → Privacy &
+  Security → Automation.
 
 Twilio Skills and Twilio MCP are Public Beta Twilio surfaces and are not covered
 by Twilio Support Terms or an SLA.
