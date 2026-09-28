@@ -3,7 +3,8 @@
 import { existsSync, readdirSync, rmSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
-import { capture, have, killModelServer, runStreaming, type LogFn } from "./exec.ts";
+import { capture, have, runStreaming, type LogFn } from "./exec.ts";
+import { killModelServer } from "./daemons.ts";
 import {
   CONFIG_FILE,
   CONFIG_DIR,
@@ -31,7 +32,7 @@ export type UninstallKey =
   | "modelRuntime";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
 

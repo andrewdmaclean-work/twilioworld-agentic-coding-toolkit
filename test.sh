@@ -27,12 +27,14 @@ check "Twilio Skills submodule is populated" test -f vendor/twilio-ai/skills/REA
 check "tracked JSON files are valid" bash -c 'jq empty opencode.json toolkit.defaults.json tui/assets/pi/models.json'
 check "runtime PID files are not tracked" bash -c '! git ls-files --error-unmatch .toolkit/model-server.pid .toolkit/mcp-proxy.pid >/dev/null 2>&1'
 check "Bun lockfile is committed" test -f tui/bun.lock
+check "toolchain downloads are pinned and checksum-verified" bash -c 'grep -q "^BUN_VERSION=\"[0-9.]*\"" toolkit && grep -q "verify_download" toolkit && ! grep -q "releases/latest" toolkit'
+check "no opener runs without naming its destination" bash -c '! grep -rnE --exclude="*.test.ts" "openInNewWindow|spawn\(\"open\", \[file\]" tui/src >/dev/null'
 
 echo "── Product boundaries ──"
 check "Docs MCP remains configured" grep -q "https://mcp.twilio.com/docs" opencode.json
-check "local AI bundle is selected by default" grep -q '"localGemma": true' toolkit.defaults.json
-check "Execute MCP is fully removed" bash -c '! rg -n "Execute MCP|executeMcp|TWILIO_MCP_CREDS|twilio-execute|@twilio-alpha/mcp" README.md opencode.json toolkit.defaults.json tui/src --glob "!*.test.ts" >/dev/null'
-check "agent installers do not pipe downloads into a shell" bash -c '! rg -n "curl[^\n]*\\|[^\n]*(bash|sh)" tui/src/lib/configure-agent.ts >/dev/null'
+check "first run downloads nothing large by default" bash -c '! grep -qE "localGemma|devPhone" toolkit.defaults.json'
+check "Execute MCP is fully removed" bash -c '! grep -rnE --exclude="*.test.ts" "Execute MCP|executeMcp|TWILIO_MCP_CREDS|twilio-execute|@twilio-alpha/mcp" README.md opencode.json toolkit.defaults.json tui/src >/dev/null'
+check "agent installers do not pipe downloads into a shell" bash -c '! grep -nE "curl.*\|[[:space:]]*(ba)?sh\b" tui/src/lib/configure-agent.ts >/dev/null'
 check "model downloads use pinned SHA-256 digests" bash -c 'grep -q "LLAMAFILE_SHA256 = \"[a-f0-9]\\{64\\}\"" tui/src/lib/constants.ts && grep -q "digestMatches" tui/src/lib/model-install.ts'
 check "quick start uses the canonical clone URL" grep -q "github.com/andrewdmaclean-work/twilioworld-agentic-coding-toolkit" README.md
 

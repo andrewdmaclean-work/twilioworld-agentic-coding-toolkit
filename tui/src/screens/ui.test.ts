@@ -5,8 +5,12 @@ import { buildSettingsScreen } from "./settings.ts";
 import { buildResourcesScreen } from "./resources.ts";
 import { buildRobotFace } from "./robot-face.ts";
 import type { ToolkitStatus } from "../status.ts";
-import { buildDashboard } from "../index.ts";
+import { buildDashboard } from "../dashboard.ts";
+import { buildWelcomeScreen } from "./welcome.ts";
+import { buildLocalAiInstallScreen } from "./local-ai-install.ts";
+import { buildAddAllReviewScreen } from "./add-all-review.ts";
 import { buildLogScreen } from "./log.ts";
+import { routeLabels } from "./chrome.ts";
 import { buildAgentScreen } from "./agent.ts";
 import { buildLocalChatScreen } from "./local-chat.ts";
 import { buildModelControlsScreen } from "./model-controls.ts";
@@ -22,26 +26,25 @@ afterEach(() => {
 test("Settings renders only configuration actions", async () => {
   const t = await createTestRenderer({ width: 80, height: 24 });
   activeRenderer = t;
-  let setupOpened = false;
+  let repairOpened = false;
   const screen = buildSettingsScreen(t.renderer, {
-    onSetup: () => { setupOpened = true; },
-    onModelControls: () => {},
+    onRepair: () => { repairOpened = true; },
     onUninstall: () => {},
     onCancel: () => {},
   });
   t.renderer.root.add(screen);
   (screen.findDescendantById("settings-screen-select") as SelectRenderable).focus();
   await t.renderOnce();
-  expect(t.captureCharFrame()).toContain("Settings");
-  expect(t.captureCharFrame()).toContain("Install or repair features");
-  expect(t.captureCharFrame()).toContain("Manage local AI");
+  expect(routeLabels.get(screen)).toBe("Settings");
+  expect(t.captureCharFrame()).toContain("Check & repair");
+  expect(t.captureCharFrame()).not.toContain("Install or repair");
   expect(t.captureCharFrame()).toContain("Uninstall or reset");
   expect(t.captureCharFrame()).not.toContain("TwilioWorld");
 
   await Bun.sleep(250);
   t.mockInput.pressEnter();
   await t.flush();
-  expect(setupOpened).toBe(true);
+  expect(repairOpened).toBe(true);
 });
 
 test("Resources renders as a dedicated top-level route", async () => {
@@ -55,15 +58,15 @@ test("Resources renders as a dedicated top-level route", async () => {
   t.renderer.root.add(screen);
   await t.renderOnce();
   const frame = t.captureCharFrame();
-  expect(frame).toContain("Dashboard / Resources");
+  expect(routeLabels.get(screen)).toBe("Resources");
   expect(frame).toContain("TwilioWorld");
-  expect(frame).toContain("Twilio AI Docs");
+  expect(frame).toContain("Twilio AI docs");
 });
 
 test("coding-agent setup requires review before installation", async () => {
   const t = await createTestRenderer({ width: 90, height: 28 });
   activeRenderer = t;
-  const screen = buildAgentScreen(t.renderer, () => {}, () => {});
+  const screen = buildAgentScreen(t.renderer, { onFinished: () => {}, onCancel: () => {} });
   t.renderer.root.add(screen);
   await t.renderOnce();
   await Bun.sleep(250);
@@ -75,15 +78,18 @@ test("coding-agent setup requires review before installation", async () => {
   expect(frame).toContain("Go back");
 });
 
-test("local chat offers existing browser and Pi interfaces", async () => {
-  const t = await createTestRenderer({ width: 88, height: 24 });
+test("local chat owns both interfaces and its settings", async () => {
+  const t = await createTestRenderer({ width: 100, height: 26 });
   activeRenderer = t;
   const screen = buildLocalChatScreen(t.renderer, {
     modelReady: false,
     piReady: false,
-    modelSize: "3.3 GB",
+    running: false,
+    modelName: "Gemma 4 E2B",
+    port: "8080",
     onBrowser: () => {},
     onPi: () => {},
+    onSettings: () => {},
     onCancel: () => {},
   });
   t.renderer.root.add(screen);
@@ -91,7 +97,51 @@ test("local chat offers existing browser and Pi interfaces", async () => {
   const frame = t.captureCharFrame();
   expect(frame).toContain("Browser chat (llamafile)");
   expect(frame).toContain("Pi (terminal)");
-  expect(frame).toContain("downloads once (~3.3 GB)");
+  expect(frame).toContain("Local AI settings");
+  expect(frame).toContain("choose it before anything downloads");
+});
+
+test("welcome asks what to do first and downloads nothing", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const chosen: string[] = [];
+  t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", onChoose: (c) => chosen.push(c) }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("What would you like to do first?");
+  expect(frame).toContain("Set up a coding agent (recommended)");
+  expect(frame).toContain("Try private local chat");
+  expect(frame).toContain("Look around first");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(chosen).toEqual(["agent"]);
+});
+
+test("local AI asks for the model before downloading and shows what else installs", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const picked: string[] = [];
+  t.renderer.root.add(buildLocalAiInstallScreen(t.renderer, {
+    next: "pi",
+    selectedSlug: "phi4-mini",
+    installedSlugs: [],
+    runtimeInstalled: false,
+    piInstalled: false,
+    freeGb: 42.5,
+    onChoose: (m) => picked.push(m.slug),
+    onCancel: () => picked.push("cancel"),
+  }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Gemma 4 E2B (recommended)");
+  expect(frame).toContain("Phi-4-mini");
+  expect(frame).toContain("llamafile runtime (302MB) and the Pi terminal interface");
+  expect(frame).toContain("Free disk space: 42.5 GB");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(picked).toEqual(["phi4-mini"]);
 });
 
 test("reasoning visibility and effort cycle independently in place", async () => {
@@ -252,4 +302,68 @@ test("task log renders progress and a contextual completion footer", async () =>
   expect(frame).toContain("Task complete");
   expect(frame).toContain("●  [2/2] Model ready");
   expect(frame).toContain("[Enter] return");
+});
+
+test("dashboard footer keeps the latest activity visible", async () => {
+  const t = await createTestRenderer({ width: 120, height: 32 });
+  activeRenderer = t;
+  const dash = buildDashboard(t.renderer, () => {});
+  t.renderer.root.add(dash.dashboard);
+  dash.update(null);
+  dash.setActivity("Claude Code closed · 14:02");
+  await t.renderOnce();
+  expect(t.captureCharFrame()).toContain("● Claude Code closed · 14:02");
+  dash.dispose();
+});
+
+test("welcome recommends adding Twilio to agents already installed", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const chosen: string[] = [];
+  t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", detectedAgents: ["Claude Code", "Codex"], onChoose: (c) => chosen.push(c) }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Add Twilio to my coding agents (recommended)");
+  expect(frame).toContain("found Claude Code, Codex");
+  expect(frame).toContain("Set up a specific agent");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(chosen).toEqual(["all"]);
+});
+
+test("add-all review lists what is written for each agent", async () => {
+  const t = await createTestRenderer({ width: 110, height: 28 });
+  activeRenderer = t;
+  let confirmed = false;
+  t.renderer.root.add(buildAddAllReviewScreen(t.renderer, {
+    plans: [{ name: "Claude Code", summary: "Twilio plugin + Docs (user scope)" }, { name: "Cursor", summary: "Skills via ~/.agents/skills + Docs in ~/.cursor/mcp.json" }],
+    skills: true,
+    onConfirm: () => { confirmed = true; },
+    onCancel: () => {},
+  }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Twilio Skills → ~/.agents/skills");
+  expect(frame).toContain("Claude Code  Twilio plugin + Docs (user scope)");
+  expect(frame).toContain("Add Twilio to these 2 agents");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(confirmed).toBe(true);
+});
+
+test("a disposed robot never draws after teardown", async () => {
+  const t = await createTestRenderer({ width: 40, height: 10 });
+  const robot = buildRobotFace(t.renderer);
+  t.renderer.root.add(robot.container);
+  await t.renderOnce();
+  const errors: unknown[] = [];
+  const onError = (e: unknown) => { errors.push(e); };
+  process.on("uncaughtException", onError);
+  robot.dispose();
+  t.renderer.destroy();
+  await Bun.sleep(1200);
+  process.off("uncaughtException", onError);
+  expect(errors).toEqual([]);
 });

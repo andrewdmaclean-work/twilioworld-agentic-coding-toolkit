@@ -10,7 +10,10 @@
 import {
   BoxRenderable,
   ScrollBoxRenderable,
+  StyledText,
   TextRenderable,
+  bold,
+  fg,
   type CliRenderer,
 } from "@opentui/core";
 import { THEME } from "../theme.ts";
@@ -41,26 +44,6 @@ function colorFor(line: string, stream: "stdout" | "stderr"): string {
   return THEME.silver;
 }
 
-function wrapText(text: string, width: number): string {
-  if (width <= 0) return text;
-  const out: string[] = [];
-  for (const raw of text.split("\n")) {
-    if (!raw) {
-      out.push("");
-      continue;
-    }
-    let line = raw;
-    while (line.length > width) {
-      let cut = line.lastIndexOf(" ", width);
-      if (cut < Math.max(12, Math.floor(width * 0.4))) cut = width;
-      out.push(line.slice(0, cut).trimEnd());
-      line = line.slice(cut).trimStart();
-    }
-    out.push(line);
-  }
-  return out.join("\n");
-}
-
 export function buildLogScreen(
   renderer: CliRenderer,
   title: string,
@@ -69,13 +52,18 @@ export function buildLogScreen(
     onDone: (ok: boolean) => void,
   ) => void | Promise<void>,
   onFinished: (ok: boolean) => void,
+  opts: {
+    /** What Enter does after success, e.g. "choose where to open Pi". */
+    successAction?: () => string | undefined;
+  } = {},
 ): BoxRenderable {
+  const successFooter = () => shortcutBar(["Enter", opts.successAction?.() ?? "return"], ["D", "details"]);
   const { screen, body, footer } = buildEmbeddedRouteChrome(renderer, {
     id: "log-screen",
-    route: "Dashboard / Task Log",
+    route: `Dashboard / ${title}`,
     title,
     subtitle: "",
-    bodyTitle: "Live Output",
+    bodyTitle: "Live output",
     footer: shortcutBar(["D", "details"]),
   });
 
@@ -110,8 +98,21 @@ export function buildLogScreen(
   const recentSteps: string[] = [];
   const dismissGuard = createInputGuard();
 
-  function onLog(line: string, stream: "stdout" | "stderr") {
-    if (!line.trim()) return; // skip blank lines
+  let lastWasSpacer = true;
+
+  /** One blank line between groups; never two in a row or at the top. */
+  function addSpacer(): void {
+    if (lastWasSpacer) return;
+    lastWasSpacer = true;
+    lineCount++;
+    scroll.content.add(new TextRenderable(renderer, { id: `log-line-${lineCount}`, content: "" }));
+  }
+
+  function onLog(rawLine: string, stream: "stdout" | "stderr") {
+    // Steps are logged as "\n▶ …": the newline means "start a new group".
+    if (rawLine.startsWith("\n")) addSpacer();
+    const line = rawLine.replace(/^\n+/, "").trimEnd();
+    if (!line.trim()) { addSpacer(); return; }
     const logKey = `${stream}:${line}`;
     if (logKey === lastLogKey) return;
     lastLogKey = logKey;
@@ -136,11 +137,20 @@ export function buildLogScreen(
       }
     }
     lineCount++;
+    lastWasSpacer = false;
+    // The renderer wraps to the panel's real width (and re-wraps on resize).
+    // Indentation becomes a left margin so wrapped lines stay indented.
+    const indent = line.match(/^\s*/)?.[0].length ?? 0;
+    const text = line.slice(indent);
     scroll.content.add(
       new TextRenderable(renderer, {
         id: `log-line-${lineCount}`,
-        content: wrapText(line, Math.max(24, (scroll.width ?? renderer.width) - 8)),
-        fg: colorFor(line, stream),
+        // Section lines ("▶ [1/3] Twilio knowledge") read as headings.
+        content: text.startsWith("▶") ? new StyledText([fg(THEME.red)(bold(text))]) : text,
+        fg: colorFor(text, stream),
+        marginLeft: indent,
+        wrapMode: "word",
+        flexShrink: 0,
       }),
     );
   }
@@ -155,7 +165,7 @@ export function buildLogScreen(
     progress.content = ok ? `  ●  Task complete  ${elapsed}s` : `  !  Task failed  ${elapsed}s`;
     progress.fg = ok ? THEME.green : ERR_COLOR;
     footer.content = ok
-      ? shortcutBar(["D", "details"], ["Enter", "return"])
+      ? successFooter()
       : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]);
     footer.fg = ok ? THEME.green : ERR_COLOR;
     dismissGuard.arm();
@@ -168,6 +178,7 @@ export function buildLogScreen(
     for (const child of [...scroll.content.getChildren()]) scroll.content.remove(child.id);
     lineCount = 0;
     lastLogKey = "";
+    lastWasSpacer = true;
     recentSteps.length = 0;
     timeline.content = "";
   }
@@ -216,7 +227,7 @@ export function buildLogScreen(
       scroll.visible = detailsVisible;
       timeline.visible = !detailsVisible;
       footer.content = taskDone
-        ? (taskOk ? shortcutBar(["D", "details"], ["Enter", "return"]) : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]))
+        ? (taskOk ? successFooter() : shortcutBar(["R", "retry"], ["D", "details"], ["Esc", "return"]))
         : (detailsVisible ? shortcutBar(["D", "hide details"]) : shortcutBar(["D", "show details"]));
       return;
     }

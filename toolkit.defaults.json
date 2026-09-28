@@ -2,9 +2,7 @@
   "version": 1,
   "addons": {
     "twilioSkills": true,
-    "docsMcp": true,
-    "devPhone": false,
-    "localGemma": true
+    "docsMcp": true
   },
   "settings": {
     "modelReasoning": "off",

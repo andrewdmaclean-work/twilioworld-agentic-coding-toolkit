@@ -1,6 +1,5 @@
 import type { ToolkitStatus } from "./status.ts";
 import { MODEL_SERVER_PORT } from "./lib/constants.ts";
-import { getSelectedModel } from "./lib/local-models.ts";
 import { THEME } from "./theme.ts";
 
 export type ItemId = "agent" | "localchat" | "devphone" | "cli" | "resources" | "settings" | "exit";
@@ -18,15 +17,15 @@ export interface StatusLine {
 
 export function nextMove(status: ToolkitStatus | null): string {
   if (!status) return "Loading local status.";
-  if ((status.skills.count ?? 0) === 0) return "Run first-time setup to prepare Twilio knowledge.";
-  if (!status.model.ready) return `Set up a coding agent, or add private local chat (~${getSelectedModel().sizeLabel}).`;
-  return "Open local chat in your browser or Pi, or configure another coding agent.";
+  if ((status.skills.count ?? 0) === 0) return "Open Settings → Check & repair to download Twilio Skills.";
+  if (!status.model.ready) return "Add Twilio to your coding agents, or try private local chat.";
+  return "Open local chat in your browser or Pi, or set up another coding agent.";
 }
 
 export function headlineText(status: ToolkitStatus | null): string {
-  const model = status?.model.running ? "local chat online" : status?.model.ready ? "local chat ready" : "local chat optional";
-  const knowledge = (status?.skills.count ?? 0) > 0 ? "Twilio knowledge ready" : "knowledge setup needed";
-  return `${model}  |  ${knowledge}`;
+  const model = status?.model.running ? "Local chat online" : status?.model.ready ? "Local chat ready" : "Local chat not set up";
+  const knowledge = (status?.skills.count ?? 0) > 0 ? "Twilio Skills ready" : "Twilio Skills missing";
+  return `${model} · ${knowledge}`;
 }
 
 export function statusLines(status: ToolkitStatus | null): StatusLine[] {
@@ -45,10 +44,10 @@ export function statusLines(status: ToolkitStatus | null): StatusLine[] {
   return [
     status.model.running
       ? row("●", "Local AI", `Online :${MODEL_SERVER_PORT}`, THEME.green)
-      : status.model.ready ? row("●", "Local AI", "Ready", THEME.cyan) : row("○", "Local AI", "Optional", THEME.dim2),
+      : status.model.ready ? row("●", "Local AI", "Ready", THEME.cyan) : row("○", "Local AI", "Not set up", THEME.dim2),
     status.skills.count > 0
       ? row("●", "Knowledge", `${status.skills.count} skills + Docs`, THEME.green)
-      : row("○", "Knowledge", "Setup needed", THEME.yellow),
+      : row("○", "Knowledge", "Skills missing", THEME.yellow),
     status.agents.installedCount > 0
       ? row("●", "Agents", `${status.agents.installedCount} detected`, THEME.cyan)
       : row("○", "Agents", "None detected", THEME.dim2),
@@ -56,20 +55,20 @@ export function statusLines(status: ToolkitStatus | null): StatusLine[] {
       ? row("●", "Dev Phone", "Installed", THEME.cyan)
       : row("○", "Dev Phone", "Not installed", THEME.dim2),
     status.twilio.sid
-      ? row("●", "Twilio", status.twilio.profile || "Signed in", THEME.green)
+      ? row("●", "Twilio", status.twilio.profile || "Logged in", THEME.green)
       : status.twilio.installed
-        ? row("○", "Twilio", "Sign-in optional", THEME.dim2)
+        ? row("○", "Twilio", "Not logged in", THEME.dim2)
         : row("○", "Twilio", "CLI not installed", THEME.dim2),
   ];
 }
 
 const ITEMS: MenuItem[] = [
-  { id: "agent", label: () => "Set up a coding agent", detail: () => "add Twilio Skills + live Docs to Pi, Claude Code, Cursor, Codex, OpenCode, or Copilot" },
-  { id: "localchat", label: () => "Local chat", detail: (s) => s?.model.ready ? "choose the browser interface or Pi" : `private local model; browser or Pi interface (~${getSelectedModel().sizeLabel})` },
-  { id: "devphone", label: () => "Dev Phone", detail: (s) => s?.devPhone.installed ? "browser SMS + voice test phone — installed" : "optional browser SMS + voice test phone" },
-  { id: "cli", label: () => "Twilio CLI", detail: (s) => s?.twilio.sid ? `signed in as ${s.twilio.profile}` : s?.twilio.installed ? "installed; sign-in is optional until an account task needs it" : "install or open an isolated Twilio terminal" },
-  { id: "resources", label: () => "Resources", detail: () => "TwilioWorld and Twilio AI documentation" },
-  { id: "settings", label: () => "Settings", detail: () => "install or repair features, manage local AI, or uninstall/reset" },
+  { id: "agent", label: () => "Set up coding agents", detail: () => "add Twilio Skills + live Docs to your coding agents" },
+  { id: "localchat", label: () => "Local chat", detail: (s) => s?.model.ready ? "browser chat or Pi" : "private local model · browser chat or Pi" },
+  { id: "devphone", label: () => "Dev Phone", detail: (s) => s?.devPhone.installed ? "browser phone for SMS and voice · installed" : "browser phone for SMS and voice" },
+  { id: "cli", label: () => "Twilio CLI", detail: (s) => s?.twilio.sid ? `logged in as ${s.twilio.profile}` : s?.twilio.installed ? "installed · log in when you need an account" : "an isolated Twilio CLI" },
+  { id: "resources", label: () => "Resources", detail: () => "TwilioWorld and Twilio AI docs" },
+  { id: "settings", label: () => "Settings", detail: () => "check & repair, or uninstall" },
   { id: "exit", label: () => "Exit", detail: () => "" },
 ];
 
@@ -77,68 +76,65 @@ export function visibleItems(): MenuItem[] {
   return ITEMS;
 }
 
-function readiness(value: boolean): string {
-  return value ? "Ready" : "Needs setup";
+// Detail panel text. Paragraphs are single lines; wrapText() wraps them to
+// the panel width and keeps the two-space indent on every wrapped line.
+function row(label: string, value: string): string {
+  return `  ${label.padEnd(12)}${value}`;
 }
 
 export function detailFor(item: MenuItem | undefined, status: ToolkitStatus | null): string {
   if (!item || item.id === "exit") return "";
   switch (item.id) {
-    case "localchat":
-      return [
-        "OVERVIEW",
-        "  Chat with a private local model. Choose the simple llamafile browser",
-        "  interface or Pi for coding, Twilio Skills, and live Docs tools.",
-        "",
-        "READINESS",
-        `  Runtime       ${readiness(Boolean(status?.model.runtimeReady))}`,
-        `  Model         ${readiness(Boolean(status?.model.fileReady))}`,
-        `  Service       ${status?.model.running ? "Online" : "Stopped"}`,
-        "",
-        status?.model.ready
-          ? `INTERFACES\n  Browser ready. Pi ${status?.pi.installed ? "installed" : "can be installed when selected"}.`
-          : `DOWNLOAD\n  Both interfaces use a local model of approximately ${getSelectedModel().sizeLabel}.`,
-      ].join("\n");
     case "agent":
       return [
-        "OVERVIEW",
-        "  Add Twilio Skills + live Docs to the coding agent you choose, then",
-        "  open it in a new terminal. Missing agent CLIs can be installed.",
+        "Overview",
+        "  Add Twilio Skills and live Docs to all your coding agents at once, or install and open a specific one.",
         "",
-        "INCLUDED",
-        "  Twilio Skills + live Docs search (no Twilio login required)",
+        "Included",
+        "  Twilio Skills and live Docs search. No Twilio login needed.",
+      ].join("\n");
+    case "localchat":
+      return [
+        "Overview",
+        "  Chat with a private model that runs on this computer, in a simple browser interface or in Pi for coding with Twilio Skills and live Docs.",
+        "",
+        "Status",
+        row("Model", status?.model.ready ? "Downloaded" : "Not downloaded"),
+        row("Service", status?.model.running ? "Running" : "Stopped"),
+        row("Pi", status?.pi.installed ? "Installed" : "Installs when you open it"),
+        ...(status?.model.ready ? [] : ["", "Download", "  You choose a model (2.5–3.3 GB) before anything downloads."]),
       ].join("\n");
     case "devphone":
       return [
-        "OVERVIEW",
-        "  Browser test phone for real SMS and voice without a physical device.",
+        "Overview",
+        "  A browser phone for testing real SMS and voice, no device needed.",
         "",
-        "READINESS",
-        `  Twilio CLI    ${readiness(Boolean(status?.twilio.installed))}`,
-        `  Dev Phone     ${readiness(Boolean(status?.devPhone.installed))}`,
-        `  Account       ${status?.twilio.sid ? "Signed in" : "Sign in before use"}`,
+        "Status",
+        row("Dev Phone", status?.devPhone.installed ? "Installed" : "Installs when you open it"),
+        row("Account", status?.twilio.sid ? "Logged in" : "Log in before use"),
         "",
-        "NOTICE",
-        "  Use a spare number; Dev Phone can replace its webhook settings.",
+        "Note",
+        "  Use a spare number. Dev Phone can replace its webhook settings.",
       ].join("\n");
     case "cli":
       return [
-        "OVERVIEW",
-        "  Install or open the isolated Twilio CLI, then sign in or switch",
-        "  accounts when a Twilio account task requires it.",
+        "Overview",
+        "  An isolated Twilio CLI for account tasks. It never touches your system CLI or its profiles.",
         "",
-        "STATUS",
-        `  CLI           ${readiness(Boolean(status?.twilio.installed))}`,
-        status?.twilio.sid ? `  Account       ${status.twilio.profile} (${status.twilio.sid})` : "  Account       Not signed in",
+        "Status",
+        row("CLI", status?.twilio.installed ? "Installed" : "Installs when you open it"),
+        row("Account", status?.twilio.sid ? `${status.twilio.profile} (${status.twilio.sid})` : "Not logged in"),
       ].join("\n");
     case "resources":
-      return "RESOURCES\n  Open TwilioWorld or browse the Twilio AI documentation.";
+      return "Overview\n  Open TwilioWorld or browse the Twilio AI docs in your browser.";
     case "settings":
       return [
-        "SETTINGS",
-        "  Install or repair   Restore the AI bundle or add Dev Phone.",
-        "  Manage local AI     Model, reasoning visibility, effort, and storage.",
-        "  Uninstall or reset  Review toolkit-managed data before removing it.",
+        "Overview",
+        "  Features install when you first choose them, so there's no setup step here. Local AI settings are under Local chat.",
+        "",
+        "Options",
+        row("Check & repair", "Verify and fix Skills, Docs, local AI, and tools"),
+        row("Uninstall", "Review what the toolkit installed, then remove it"),
       ].join("\n");
   }
 }

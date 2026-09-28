@@ -4,13 +4,15 @@
 // user never has to visit a monolithic "Setup" screen.
 
 import { join } from "path";
-import { capture, have, killModelServer, openInNewWindow, runStreaming, twilioCliEnv, type LogFn, type NewWindowResult } from "./exec.ts";
+import { capture, have, runStreaming, twilioCliEnv, type LogFn } from "./exec.ts";
+import { killModelServer } from "./daemons.ts";
+import type { LaunchTarget } from "./terminal.ts";
 import { installLocalModel } from "./model-install.ts";
 import { getSelectedModel } from "./local-models.ts";
 import { NPM_GLOBAL_PREFIX, ROOT, TWILIO_CLI_HOME } from "./constants.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
@@ -53,20 +55,41 @@ export async function installDevPhone(opts: { onLog: LogFn; onDone: (ok: boolean
   else { err("Dev Phone install failed", onLog); onDone(false); }
 }
 
-/** Launch Dev Phone in a new terminal window. */
-export function openDevPhone(): NewWindowResult {
-  return openInNewWindow("twilio", ["dev-phone"], { cwd: ROOT });
+/** Dev Phone, opened wherever the user picks on the handoff screen. */
+export function devPhoneTarget(): LaunchTarget {
+  return {
+    id: "dev-phone",
+    label: "Dev Phone",
+    command: "twilio",
+    args: ["dev-phone"],
+    cwd: ROOT,
+    hint: "use a spare number; Dev Phone can replace its webhook settings.",
+    exitHint: "press Ctrl+C to stop Dev Phone and return",
+  };
 }
 
-/** Open a new terminal with the isolated Twilio CLI on PATH. */
-export function openTwilioTerminal(): NewWindowResult {
-  // Drop into an interactive shell so the user can run twilio commands.
-  return openInNewWindow(process.env.SHELL || "bash", [], { cwd: ROOT, env: twilioCliEnv() });
+/** An interactive shell with the isolated Twilio CLI on PATH. */
+export function twilioShellTarget(): LaunchTarget {
+  return {
+    id: "twilio-shell",
+    label: "Twilio CLI terminal",
+    command: process.env.SHELL || "bash",
+    cwd: ROOT,
+    env: twilioCliEnv(),
+    exitHint: "type exit to return",
+  };
 }
 
-/** Launch `twilio login` in a new terminal (interactive prompts). */
-export function openTwilioLogin(): NewWindowResult {
-  return openInNewWindow("twilio", ["login"], { cwd: ROOT });
+/** `twilio login` (interactive prompts). */
+export function twilioLoginTarget(): LaunchTarget {
+  return {
+    id: "twilio-login",
+    label: "Twilio login",
+    command: "twilio",
+    args: ["login"],
+    cwd: ROOT,
+    exitHint: "finish the prompts to return",
+  };
 }
 
 // ── Twilio profiles (account switching) ──────────────────────────────

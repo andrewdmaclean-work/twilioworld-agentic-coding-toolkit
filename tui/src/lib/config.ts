@@ -11,11 +11,12 @@ import {
   LEGACY_DEFAULT_CONFIG_FILE,
 } from "./constants.ts";
 
+// Capabilities that can be switched off in .toolkit/config.json. Local chat,
+// Pi, Dev Phone, and the Twilio CLI are not flags: they install when first
+// chosen, and their state comes from what is actually on disk.
 export type AddonKey =
   | "twilioSkills"
-  | "docsMcp"
-  | "devPhone"
-  | "localGemma";
+  | "docsMcp";
 
 export type ModelReasoningMode = "off" | "low" | "medium" | "high";
 
@@ -32,8 +33,6 @@ export interface ToolkitConfig {
 const ALL_ADDONS: AddonKey[] = [
   "twilioSkills",
   "docsMcp",
-  "devPhone",
-  "localGemma",
 ];
 
 export function validReasoningMode(value: unknown, fallback: ModelReasoningMode = "off"): ModelReasoningMode {
@@ -120,6 +119,12 @@ export function thinkingVisible(): boolean {
 export function setThinkingVisible(show: boolean): void {
   const config = readConfig();
   writeConfig(config.addons, { ...config.settings, showThinking: show });
+}
+
+/** Written once the welcome screen is done, so it is not shown again. */
+export function markFirstRunComplete(): void {
+  const config = readConfig();
+  writeConfig(config.addons, config.settings);
 }
 
 export function setLocalModelSlug(slug: string): void {

@@ -30,7 +30,7 @@ import {
 import type { LocalModel } from "./local-models.ts";
 
 function ok(msg: string, onLog: LogFn) { onLog(`✓ ${msg}`, "stdout"); }
-function warn(msg: string, onLog: LogFn) { onLog(`⚠  ${msg}`, "stderr"); }
+function warn(msg: string, onLog: LogFn) { onLog(`⚠ ${msg}`, "stderr"); }
 function err(msg: string, onLog: LogFn) { onLog(`✗ ${msg}`, "stderr"); }
 function say(msg: string, onLog: LogFn) { onLog(msg, "stdout"); }
 function step(msg: string, onLog: LogFn) { onLog(`\n▶ ${msg}`, "stdout"); }
@@ -49,13 +49,13 @@ function startProgressLogger(
   opts: { facts?: boolean } = {},
 ): ReturnType<typeof setInterval> {
   let tick = 0;
-  if (opts.facts) onLog(`   Twilio AI tip: ${twilioFactAt(tick++)}`, "stdout");
+  if (opts.facts) onLog(`  Twilio AI tip: ${twilioFactAt(tick++)}`, "stdout");
   return setInterval(() => {
     try {
       const downloaded = existsSync(dest) ? statSync(dest).size : 0;
       const pct = totalBytes > 0 ? Math.min(100, Math.round((downloaded / totalBytes) * 100)) : 0;
-      onLog(`   downloading… ${sizeLabel(downloaded)} / ${sizeLabel(totalBytes)}  (${pct}%)`, "stdout");
-      if (opts.facts && tick % 5 === 0) onLog(`   Twilio AI tip: ${twilioFactAt(tick / 5)}`, "stdout");
+      onLog(`  downloading… ${sizeLabel(downloaded)} / ${sizeLabel(totalBytes)}  (${pct}%)`, "stdout");
+      if (opts.facts && tick % 5 === 0) onLog(`  Twilio AI tip: ${twilioFactAt(tick / 5)}`, "stdout");
       tick++;
     } catch {
       // File may not exist yet.
@@ -98,7 +98,7 @@ export async function sha256File(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
-async function digestMatches(path: string, expected: string): Promise<boolean> {
+export async function digestMatches(path: string, expected: string): Promise<boolean> {
   try { return (await sha256File(path)) === expected.toLowerCase(); }
   catch { return false; }
 }
@@ -148,7 +148,7 @@ export async function installLocalModel(opts: {
   }
 
   if (!runtimeOk()) {
-    say(`   Downloading llamafile runtime (~${LLAMAFILE_SIZE_LABEL})…`, onLog);
+    say(`  Downloading llamafile runtime (~${LLAMAFILE_SIZE_LABEL})…`, onLog);
     mkdirSync(TOOLS_DIR, { recursive: true });
     const runtimeProgress = startProgressLogger(LLAMAFILE_DEST, LLAMAFILE_SIZE_BYTES, 3000, onLog);
     const res = await runStreaming("curl", curlDownloadArgs(LLAMAFILE_URL, LLAMAFILE_DEST), { cwd: ROOT, onLog });
@@ -162,7 +162,7 @@ export async function installLocalModel(opts: {
       rmSync(LLAMAFILE_DEST, { force: true });
       return false;
     }
-    say("   Verifying runtime checksum…", onLog);
+    say("  Verifying runtime checksum…", onLog);
     if (!(await digestMatches(LLAMAFILE_DEST, LLAMAFILE_SHA256))) {
       err("Runtime checksum did not match the pinned release — removing it.", onLog);
       rmSync(LLAMAFILE_DEST, { force: true });
@@ -183,7 +183,7 @@ export async function installLocalModel(opts: {
 
     mkdirSync(MODELS_DIR, { recursive: true });
     if (!ggufStagingExists(model)) {
-      say(`   Downloading ${model.name} (~${model.sizeLabel})…`, onLog);
+      say(`  Downloading ${model.name} (~${model.sizeLabel})…`, onLog);
       const weightsProgress = startProgressLogger(model.staging, model.sizeBytes, 3000, onLog, { facts: true });
       const res = await runStreaming("curl", curlDownloadArgs(model.url, model.staging), { cwd: ROOT, onLog });
       clearInterval(weightsProgress);
@@ -196,7 +196,7 @@ export async function installLocalModel(opts: {
       ok(`Partial download present (${(sz / 1_073_741_824).toFixed(1)}GB) — resuming`, onLog);
     }
 
-    say("   Verifying model checksum…", onLog);
+    say("  Verifying model checksum…", onLog);
     if (!(await digestMatches(model.staging, model.sha256))) {
       err("Model checksum did not match its content-addressed download — removing it.", onLog);
       rmSync(model.staging, { force: true });
@@ -210,4 +210,10 @@ export async function installLocalModel(opts: {
 
   ok("Local model ready for browser chat or Pi.", onLog);
   return true;
+}
+
+/** Free space where models are stored, in GB (null when unknown). */
+export function freeDiskGb(): number | null {
+  const kb = freeKb();
+  return Number.isFinite(kb) && kb > 0 ? kb / 1_048_576 : null;
 }

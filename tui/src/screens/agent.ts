@@ -8,33 +8,53 @@ import {
   type CliRenderer,
 } from "@opentui/core";
 import { configureAgent } from "../lib/configure-agent.ts";
+import type { LaunchTarget } from "../lib/terminal.ts";
 import { agentPickerOptions } from "../lib/agents.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { THEME } from "../theme.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
 
-export function buildAgentScreen(
-  renderer: CliRenderer,
-  onFinished: (ok?: boolean) => void,
-  onCancel: () => void,
-): BoxRenderable {
-  const agentOptions = agentPickerOptions();
+export interface AgentScreenOptions {
+  onFinished: (ok?: boolean) => void;
+  onCancel: () => void;
+  onLaunch?: (target: LaunchTarget) => void;
+  /** Pi needs a local model; when none is downloaded, the caller shows the
+   *  model-choice review instead of downloading the default silently. */
+  piNeedsModel?: () => boolean;
+  onPiNeedsModel?: () => void;
+  /** Agents found on this computer; enables the "All my agents" option. */
+  detectedAgents?: string[];
+  onAddToAll?: () => void;
+}
+
+export function buildAgentScreen(renderer: CliRenderer, opts: AgentScreenOptions): BoxRenderable {
+  const {
+    onFinished, onCancel, onLaunch = () => {}, piNeedsModel = () => false, onPiNeedsModel = () => {},
+    detectedAgents = [], onAddToAll,
+  } = opts;
+  const agentOptions = [
+    ...(detectedAgents.length && onAddToAll
+      ? [{ name: "All my agents", description: `add Twilio to ${detectedAgents.join(", ")} · installs nothing`, value: "__all__" }]
+      : []),
+    ...agentPickerOptions(),
+  ];
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "agent-screen",
-    route: "Dashboard / Set up a coding agent",
-    title: "Set up a coding agent",
-    subtitle: "Adds Twilio knowledge, then opens the agent in a new terminal. Missing CLIs may be installed.",
+    route: "Dashboard / Set up coding agents",
+    title: "Set up coding agents",
+    subtitle: "Adds Twilio Skills and live Docs, then opens the agent here. Missing CLIs are installed first.",
     bodyTitle: "Choose an agent",
-    footer: shortcutBar(["Esc", "dashboard"], ["Enter", "review"]),
+    footer: shortcutBar(["Enter", "review"], ["Esc", "back"]),
   });
 
   const select = new SelectRenderable(renderer, {
     id: "agent-select",
-    height: agentOptions.length + 2,
+    height: listHeight(agentOptions.length),
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     options: agentOptions,
     ...SELECT_STYLE,
   });
@@ -46,15 +66,19 @@ export function buildAgentScreen(
     content: "",
     fg: THEME.yellow,
     visible: false,
+    width: "100%",
+    wrapMode: "word",
+    flexShrink: 0,
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "agent-confirm-select",
-    height: 4,
+    height: listHeight(2),
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     visible: false,
     options: [
-      { name: "Continue", description: "install if needed, add Twilio knowledge, and open a new terminal" },
+      { name: "Continue", description: "install if needed and add Twilio knowledge" },
       { name: "Go back", description: "choose a different agent" },
     ],
     ...SELECT_STYLE,
@@ -72,10 +96,17 @@ export function buildAgentScreen(
   select.on(SelectRenderableEvents.ITEM_SELECTED, (_, option) => {
     if (!selectGuard.ready()) return;
     selectedAgent = option.value as string;
+    if (selectedAgent === "__all__") { onAddToAll?.(); return; }
+    if (selectedAgent.startsWith("Pi") && piNeedsModel()) {
+      onPiNeedsModel();
+      return;
+    }
     select.visible = false;
     confirmLabel.content = selectedAgent.startsWith("Pi")
-      ? `Set up Pi? This may install Pi and download the selected local model, then opens a new terminal.`
-      : `Set up ${selectedAgent}? This may install its CLI and will open a new terminal window.`;
+      ? "Set up Pi? This may install Pi (npm) and copies Twilio Skills into .toolkit/pi-agent/."
+      : selectedAgent.startsWith("Other")
+        ? "Show manual setup steps? Nothing is installed."
+        : `Set up ${selectedAgent}? This may install its CLI and adds Twilio Skills to ~/.agents/skills.`;
     confirmLabel.visible = true;
     confirmSelect.visible = true;
     confirmSelect.setSelectedIndex(1);
@@ -85,11 +116,19 @@ export function buildAgentScreen(
   confirmSelect.on(SelectRenderableEvents.ITEM_SELECTED, (index) => {
     if (!confirmGuard.ready()) return;
     if (index !== 0 || !selectedAgent) { showAgentList(); return; }
+    let ready: LaunchTarget | null = null;
     const logScreen = buildLogScreen(
       renderer,
       `Set up coding agent — ${selectedAgent}`,
-      (onLog, onDone) => configureAgent({ agent: selectedAgent, onLog, onDone }),
-      (ok) => onFinished(ok),
+      (onLog, onDone) => {
+        ready = null;
+        return configureAgent({ agent: selectedAgent, onLog, onDone, onReady: (target) => { ready = target; } });
+      },
+      (ok) => {
+        if (ok && ready) onLaunch(ready);
+        else onFinished(ok);
+      },
+      { successAction: () => ready ? "choose where it opens" : undefined },
     );
     removeAllChildren(screen);
     screen.add(logScreen);

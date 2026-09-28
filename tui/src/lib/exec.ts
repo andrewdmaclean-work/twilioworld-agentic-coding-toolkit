@@ -1,37 +1,20 @@
 // lib/exec.ts — command execution primitives for the TUI.
 //
-// Four shapes:
+//   runStreaming()  — non-interactive command; stdout/stderr streamed
+//                     line-by-line to a callback (→ log pane). Uses
+//                     /bin/sh so APE binaries and npm shebangs resolve.
 //
-//   runStreaming()     — non-interactive command; stdout/stderr streamed
-//                        line-by-line to a callback (→ log pane). Uses
-//                        /bin/sh so APE binaries and npm shebangs resolve.
+//   runTakeover()   — interactive program that takes over this terminal.
+//                     Caller MUST renderer.suspend() before and
+//                     renderer.resume() after (see lib/handoff.ts).
 //
-//   runTakeover()      — interactive program that takes over the full
-//                        terminal in-place. Caller MUST renderer.suspend()
-//                        before and renderer.resume() after. Not currently
-//                        used by the menu (Pi/Dev Phone open in a new
-//                        window instead, see openInNewWindow), kept as a
-//                        primitive for same-window takeover if ever needed.
-//
-//   openInNewWindow()  — interactive program launched in a brand-new
-//                        terminal window (Pi, Dev Phone), fully detached
-//                        from this process. The TUI keeps running normally;
-//                        no suspend/resume needed.
-//
-//   startDaemon()      — long-running background process, own process group.
+// Opening windows, browsers, and launch scripts lives in lib/terminal.ts;
+// background daemons live in lib/daemons.ts.
 
-import { spawn, spawnSync, type ChildProcess } from "child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { execSync } from "child_process";
-import { tmpdir } from "os";
-import { delimiter, dirname, join } from "path";
+import { spawn, spawnSync, execSync } from "child_process";
+import { existsSync, mkdirSync } from "fs";
+import { delimiter, join } from "path";
 import {
-  LLAMAFILE_DEST,
-  MCP_PROXY_PID,
-  MCP_PROXY_PORT,
-  MCP_PROXY_SCRIPT,
-  MODEL_SERVER_PID,
-  MODEL_SERVER_PORT,
   NPM_GLOBAL_PREFIX,
   TOOLKIT_BIN_DIRS,
   TWILIO_CLI_HOME,
@@ -45,12 +28,12 @@ export interface RunResult {
 }
 
 /** Shell-quote a single argument (single-quote wrapping). */
-function q(arg: string): string {
+export function q(arg: string): string {
   return `'${arg.replace(/'/g, "'\\''")}'`;
 }
 
 /** Build a /bin/sh -c invocation string from command + args. */
-function shCmd(command: string, args: string[]): string {
+export function shCmd(command: string, args: string[]): string {
   return [command, ...args].map(q).join(" ");
 }
 
@@ -72,7 +55,7 @@ function localCommandPath(bin: string): string {
   return "";
 }
 
-function commandForSpawn(command: string): string | null {
+export function commandForSpawn(command: string): string | null {
   if (!TOOLKIT_LOCAL_ONLY_BINS.has(command)) return command;
   return localCommandPath(command) || null;
 }
@@ -102,7 +85,7 @@ export function twilioCliEnv(extra: NodeJS.ProcessEnv = {}): NodeJS.ProcessEnv {
   };
 }
 
-function commandEnv(command: string, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
+export function commandEnv(command: string, extra?: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return command === "twilio" ? twilioCliEnv(extra) : toolkitEnv(extra);
 }
 
@@ -196,170 +179,6 @@ export function runTakeover(
   return { code: res.status ?? 1, ok: res.status === 0 };
 }
 
-export interface NewWindowResult {
-  ok: boolean;
-  error?: string;
-}
-
-export function openUrl(url: string): NewWindowResult {
-  try {
-    if (process.platform === "darwin") {
-      spawn("open", [url], { stdio: "ignore", detached: true }).unref();
-      return { ok: true };
-    }
-    if (process.platform === "win32") {
-      spawn("cmd.exe", ["/c", "start", "", url], { stdio: "ignore", detached: true }).unref();
-      return { ok: true };
-    }
-    if (!process.env.DISPLAY) {
-      return { ok: false, error: "No DISPLAY found. Open quicklinks from a terminal inside the VNC desktop." };
-    }
-    const openers = ["chromium-launch", "xdg-open", "gio", "sensible-browser", "epiphany-browser", "chromium", "chromium-browser"];
-    for (const opener of openers) {
-      if (!have(opener)) continue;
-      const args = opener === "gio" ? ["open", url] : [url];
-      spawn(opener, args, { stdio: "ignore", detached: true }).unref();
-      return { ok: true };
-    }
-    return { ok: false, error: `No browser opener found. Visit ${url} manually.` };
-  } catch (e) {
-    return { ok: false, error: `Could not open ${url}: ${(e as Error).message}` };
-  }
-}
-
-/** export lines for any env entries this call adds/overrides vs. the
- *  current process env — the new terminal's login shell already has
- *  everything else. */
-/** export lines for env vars the new shell needs. The target is a
- *  brand-new Terminal.app/login shell, NOT a fork of this process, so
- *  nothing is inherited automatically — its rc files (~/.zshrc etc.) run
- *  first and can set up a *different* PATH than this process has. PATH is
- *  therefore always exported explicitly, even when it matches this process's env, so the new shell
- *  resolves the same toolkit-local node/npm/twilio/pi/etc. binaries this
- *  process already validated. Other vars only get exported when they differ. */
-function envExportLines(env: NodeJS.ProcessEnv): string[] {
-  const lines: string[] = [];
-  if (env.PATH) lines.push(`export PATH=${q(env.PATH)}`);
-  for (const [k, v] of Object.entries(env)) {
-    if (k === "PATH" || v === undefined || process.env[k] === v) continue;
-    lines.push(`export ${k}=${q(v)}`);
-  }
-  return lines;
-}
-
-function openMacTerminal(inner: string, cwd: string, env: NodeJS.ProcessEnv): NewWindowResult {
-  try {
-    const file = join(tmpdir(), `twilioworld-launch-${Date.now()}-${Math.random().toString(36).slice(2)}.command`);
-    const script = [
-      "#!/bin/sh",
-      `cd ${q(cwd)}`,
-      ...envExportLines(env),
-      inner,
-      `rm -f -- ${q(file)}`, // self-cleanup once the foreground command exits
-      "",
-    ].join("\n");
-    writeFileSync(file, script, { mode: 0o755 });
-    // `open` hands the .command file to Terminal.app, which runs it in a
-    // brand-new window and returns immediately — this process never blocks.
-    spawn("open", [file], { stdio: "ignore", detached: true }).unref();
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: `Could not open Terminal: ${(e as Error).message}` };
-  }
-}
-
-const LINUX_TERMINALS: Array<{ bin: string; args: (cmd: string) => string[] }> = [
-  { bin: "gnome-terminal", args: (cmd) => ["--", "/bin/sh", "-c", cmd] },
-  { bin: "konsole", args: (cmd) => ["-e", "/bin/sh", "-c", cmd] },
-  { bin: "xfce4-terminal", args: (cmd) => ["-e", `/bin/sh -c ${q(cmd)}`] },
-  { bin: "x-terminal-emulator", args: (cmd) => ["-e", `/bin/sh -c ${q(cmd)}`] },
-  { bin: "xterm", args: (cmd) => ["-e", `/bin/sh -c ${q(cmd)}`] },
-];
-
-function openLinuxTerminal(inner: string, cwd: string, env: NodeJS.ProcessEnv): NewWindowResult {
-  const full = [`cd ${q(cwd)}`, ...envExportLines(env), inner].join(" && ");
-  for (const t of LINUX_TERMINALS) {
-    if (!have(t.bin)) continue;
-    try {
-      spawn(t.bin, t.args(full), { stdio: "ignore", detached: true }).unref();
-      return { ok: true };
-    } catch {
-      // try the next terminal emulator
-    }
-  }
-  return {
-    ok: false,
-    error: "No supported terminal emulator found (tried gnome-terminal, konsole, xfce4-terminal, x-terminal-emulator, xterm).",
-  };
-}
-
-function openWindowsTerminal(inner: string, cwd: string, env: NodeJS.ProcessEnv): NewWindowResult {
-  const full = [`cd /d ${cwd}`, ...envExportLines(env).map((l) => l.replace(/^export /, "set ")), inner].join(" && ");
-  try {
-    const useWt = have("wt.exe") || have("wt");
-    const args = useWt
-      ? ["/c", "wt", "cmd", "/k", full]
-      : ["/c", "start", "TwilioWorld", "cmd", "/k", full];
-    spawn("cmd.exe", args, { stdio: "ignore", detached: true, env }).unref();
-    return { ok: true };
-  } catch (e) {
-    return { ok: false, error: `Could not open a new console window: ${(e as Error).message}` };
-  }
-}
-
-/** Launch an interactive program in a brand-new terminal window, fully
- *  detached from this process. Returns immediately — the TUI keeps
- *  running normally, no renderer.suspend()/resume() needed. Best-effort:
- *  if no terminal emulator can be found, returns { ok: false, error }
- *  so the caller can tell the user to run the command manually. */
-export function openInNewWindow(
-  command: string,
-  args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv } = {},
-): NewWindowResult {
-  const cwd = opts.cwd ?? process.cwd();
-  const env = commandEnv(command, opts.env);
-  const resolved = commandForSpawn(command);
-  if (!resolved) return { ok: false, error: `${command} is not installed in this toolkit environment.` };
-  const inner = shCmd(resolved, args);
-
-  if (process.platform === "darwin") return openMacTerminal(inner, cwd, env);
-  if (process.platform === "win32") return openWindowsTerminal(inner, cwd, env);
-  return openLinuxTerminal(inner, cwd, env);
-}
-
-/** Long-running background daemon in its own process group. */
-export function startDaemon(
-  command: string,
-  args: string[],
-  opts: { cwd?: string; env?: NodeJS.ProcessEnv; logFile?: string; pidFile?: string } = {},
-): ChildProcess {
-  let logFd: number | undefined;
-  if (opts.logFile) {
-    mkdirSync(dirname(opts.logFile), { recursive: true });
-    logFd = openSync(opts.logFile, "w");
-  }
-  const resolved = commandForSpawn(command);
-  if (!resolved) throw new Error(`${command} is not installed in this toolkit environment.`);
-  const child = spawn("/bin/sh", ["-c", shCmd(resolved, args)], {
-    cwd: opts.cwd,
-    env: commandEnv(command, opts.env),
-    stdio: logFd === undefined ? "ignore" : ["ignore", logFd, logFd],
-    detached: true,
-  });
-  if (logFd !== undefined) closeSync(logFd);
-  if (opts.pidFile && child.pid) {
-    mkdirSync(dirname(opts.pidFile), { recursive: true });
-    writeFileSync(opts.pidFile, `${JSON.stringify({
-      pid: child.pid,
-      command: shCmd(resolved, args),
-      startedAt: new Date().toISOString(),
-    })}\n`, { mode: 0o600 });
-  }
-  child.unref();
-  return child;
-}
-
 /** True if a binary is on PATH.
  *  NOTE: synchronous (blocks the event loop, and OpenTUI's render/input
  *  loop, for the duration of the subprocess). Fine for one-off calls
@@ -378,13 +197,20 @@ export function have(bin: string): boolean {
 /** Capture stdout of a quick command. Returns "" on failure.
  *  NOTE: synchronous — see have() above for why that matters. Use
  *  captureAsync() for anything on a polling/background path. */
-export function capture(command: string, args: string[], env?: NodeJS.ProcessEnv): string {
+export function capture(
+  command: string,
+  args: string[],
+  env?: NodeJS.ProcessEnv,
+  opts: { cwd?: string; timeoutMs?: number } = {},
+): string {
   const resolved = commandForSpawn(command);
   if (!resolved) return "";
   try {
     const res = spawnSync("/bin/sh", ["-c", shCmd(resolved, args)], {
       encoding: "utf8",
       env: commandEnv(command, env),
+      cwd: opts.cwd,
+      timeout: opts.timeoutMs,
     });
     return (res.stdout ?? "").trim();
   } catch {
@@ -426,155 +252,3 @@ export function fileExecutable(path: string): boolean {
   try { return existsSync(path); } catch { return false; }
 }
 
-/**
- * Kill the running llamafile model server and the MCP proxy bridge if running.
- * Uses toolkit-owned PID files so unrelated llamafile processes are left alone.
- * Returns true if a llamafile process was found and signalled.
- */
-export function killModelServer(): boolean {
-  // Also stop the proxy bridge — it's always started/stopped with the server.
-  killMcpProxy();
-  const managed = killPidFile(MODEL_SERVER_PID, [LLAMAFILE_DEST]);
-  return managed || killLegacyModelServer();
-}
-
-/** Match only an older toolkit-owned model process. Previous releases did not
- * always leave a PID file, so settings changes could fail to stop an already
- * running server. Path + server mode + port keeps the fallback from touching
- * an unrelated process that happens to use llamafile. */
-export function legacyModelCommandMatches(
-  command: string,
-  port = MODEL_SERVER_PORT,
-): boolean {
-  const escapedPort = port.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  return daemonCommandMatches(command, [LLAMAFILE_DEST])
-    && /(?:^|\s)--server(?:\s|$)/.test(command)
-    && new RegExp(`(?:^|\\s)--port(?:=|\\s+)${escapedPort}(?:\\s|$)`).test(command);
-}
-
-function killLegacyModelServer(): boolean {
-  if (process.platform === "win32") return false;
-  const result = spawnSync("lsof", [
-    "-nP",
-    "-t",
-    `-iTCP:${MODEL_SERVER_PORT}`,
-    "-sTCP:LISTEN",
-  ], { encoding: "utf8" });
-  if (result.status !== 0) return false;
-
-  const pids = (result.stdout ?? "")
-    .split(/\s+/)
-    .map((raw) => Number.parseInt(raw, 10))
-    .filter((pid) => Number.isInteger(pid) && pid > 1);
-
-  for (const pid of pids) {
-    if (!legacyModelCommandMatches(runningCommand(pid))) continue;
-    try {
-      process.kill(pid, "SIGTERM");
-      return true;
-    } catch { /* try another matching listener */ }
-  }
-  return false;
-}
-
-/**
- * Start the HTTP→HTTPS MCP proxy bridge as a background daemon.
- * Kills any existing instance first so restarts are clean.
- * The bridge is a plain Node.js script (tools/mcp-proxy.js) with no
- * npm dependencies — it uses only built-in http/https modules.
- */
-export function startMcpProxy(): void {
-  if (!existsSync(MCP_PROXY_SCRIPT)) return;
-  killMcpProxy(); // evict any leftover from a previous run
-  startDaemon("node", [MCP_PROXY_SCRIPT, "https://mcp.twilio.com/docs", String(MCP_PROXY_PORT)], { pidFile: MCP_PROXY_PID });
-}
-
-function killMcpProxy(): void {
-  killPidFile(MCP_PROXY_PID, [MCP_PROXY_SCRIPT]);
-}
-
-interface DaemonPidRecord {
-  pid: number;
-  command: string;
-}
-
-function pidFromFile(pidFile: string): DaemonPidRecord | null {
-  try {
-    const raw = readFileSync(pidFile, "utf8").trim();
-    if (raw.startsWith("{")) {
-      const parsed = JSON.parse(raw) as Partial<DaemonPidRecord>;
-      return Number.isInteger(parsed.pid) && Number(parsed.pid) > 1
-        ? { pid: Number(parsed.pid), command: typeof parsed.command === "string" ? parsed.command : "" }
-        : null;
-    }
-    const pid = Number.parseInt(raw, 10);
-    return Number.isInteger(pid) && pid > 1 ? { pid, command: "" } : null;
-  } catch {
-    return null;
-  }
-}
-
-export function daemonCommandMatches(command: string, expectedCommands: string[]): boolean {
-  return expectedCommands.some((expected) => command.includes(expected));
-}
-
-function runningCommand(pid: number): string {
-  if (process.platform === "win32") return "";
-  const result = spawnSync("ps", ["-p", String(pid), "-o", "command="], { encoding: "utf8" });
-  return result.status === 0 ? (result.stdout ?? "").trim() : "";
-}
-
-function killPidFile(pidFile: string, expectedCommands: string[]): boolean {
-  const record = pidFromFile(pidFile);
-  if (!record) { rmSync(pidFile, { force: true }); return false; }
-  const { pid } = record;
-  try {
-    if (process.platform !== "win32") {
-      const actual = runningCommand(pid);
-      if (!actual || !daemonCommandMatches(actual, expectedCommands)) {
-        rmSync(pidFile, { force: true });
-        return false;
-      }
-    } else if (record.command && !daemonCommandMatches(record.command, expectedCommands)) {
-      rmSync(pidFile, { force: true });
-      return false;
-    }
-    if (process.platform === "win32") {
-      const res = spawnSync("taskkill", ["/F", "/T", "/PID", String(pid)], { stdio: "ignore" });
-      rmSync(pidFile, { force: true });
-      return res.status === 0;
-    }
-    try {
-      process.kill(-pid, "SIGTERM");
-    } catch {
-      process.kill(pid, "SIGTERM");
-    }
-    rmSync(pidFile, { force: true });
-    return true;
-  } catch {
-    rmSync(pidFile, { force: true });
-    return false;
-  }
-}
-
-/**
- * Open the llama.cpp web UI in the browser.
- *
- * The Twilio Docs MCP server and system message are seeded server-side via
- * llamafile's --ui-config-file (see serverArgs() in model.ts), so there's
- * nothing to inject client-side — just open the page.
- */
-export function llamaWebUiUrl(
-  port = Number(MODEL_SERVER_PORT),
-  reloadId = Date.now(),
-): string {
-  // A unique URL forces an already-open browser tab to reload. This matters
-  // because Local Chat refreshes the MCP bridge immediately before opening;
-  // merely focusing the old tab leaves its disconnected MCP client in memory
-  // and the model then prints tool-call markup instead of executing the tool.
-  return `http://127.0.0.1:${port}/?new_chat=true&toolkit_reload=${reloadId}#/`;
-}
-
-export function openLlamaWebUi(port = Number(MODEL_SERVER_PORT)): NewWindowResult {
-  return openUrl(llamaWebUiUrl(port));
-}

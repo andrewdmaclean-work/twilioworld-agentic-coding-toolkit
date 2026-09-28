@@ -14,6 +14,7 @@ import { existsSync, readdirSync, statSync } from "fs";
 import { homedir } from "os";
 import { join } from "path";
 import { captureAsync, fileExecutable, haveAsync } from "./lib/exec.ts";
+import { copilotVersionIsReal } from "./lib/agent-wiring.ts";
 import { readConfig } from "./lib/config.ts";
 import {
   LLAMAFILE_DEST,
@@ -86,7 +87,7 @@ async function computeStatus(): Promise<ToolkitStatus> {
     haveAsync("claude"),
     haveAsync("codex"),
     haveAsync("cursor-agent"),
-    haveAsync("copilot"),
+    haveAsync("copilot").then(async (found) => found && copilotVersionIsReal(await captureAsync("copilot", ["--version"]))),
     pathNodeVersionAsync(),
     (fileReady && runtimeReady) ? captureAsync("curl", ["-fsS", MODEL_SERVER_URL]) : Promise.resolve(""),
   ]);

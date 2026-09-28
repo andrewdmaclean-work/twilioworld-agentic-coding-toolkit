@@ -10,7 +10,7 @@ import {
 import { CheckList, type CheckItem } from "../checklist.ts";
 import { runUninstall, type UninstallKey } from "../lib/uninstall.ts";
 import { THEME } from "../theme.ts";
-import { SELECT_STYLE, shortcutBar } from "../ui-style.ts";
+import { SELECT_STYLE, listHeight, shortcutBar } from "../ui-style.ts";
 import { buildEmbeddedRouteChrome, removeAllChildren } from "./chrome.ts";
 import { createInputGuard } from "./input-guard.ts";
 import { buildLogScreen } from "./log.ts";
@@ -19,14 +19,14 @@ type UninstallItem = CheckItem & { key: UninstallKey | `__${string}` };
 
 const UNINSTALL_ITEMS: UninstallItem[] = [
   { key: "__twilio", label: "Twilio account and CLI", description: "Remove optional Twilio tooling or data left by an older toolkit version.", heading: true },
-  { key: "devPhone" as UninstallKey, label: "Dev Phone plugin", description: "Remove @twilio-labs/plugin-dev-phone from the Twilio CLI" },
+  { key: "devPhone" as UninstallKey, label: "Dev Phone plugin", description: "remove @twilio-labs/plugin-dev-phone from the Twilio CLI" },
   { key: "apiKey" as UninstallKey, label: "Legacy toolkit API key", description: "delete the restricted key named twilioworld-toolkit, if an older version created one" },
-  { key: "twilioCli" as UninstallKey, label: "Toolkit-local Twilio CLI", description: "Remove .toolkit/npm-global and isolated Twilio CLI profile state" },
+  { key: "twilioCli" as UninstallKey, label: "Toolkit-local Twilio CLI", description: "remove .toolkit/npm-global and its Twilio CLI profiles" },
   { key: "__agents", label: "Coding agents", description: "Remove Twilio Skills installed where agents look for them.", heading: true },
-  { key: "skills" as UninstallKey, label: "Twilio Skills installed for agents", description: "Remove twilio/ and sendgrid/ from ~/.agents/skills/" },
+  { key: "skills" as UninstallKey, label: "Twilio Skills installed for agents", description: "remove twilio/ and sendgrid/ from ~/.agents/skills" },
   { key: "__local", label: "Local toolkit files", description: "Remove files used by this toolkit on this machine.", heading: true },
-  { key: "repoSkills" as UninstallKey, label: "Local toolkit copy of Twilio Skills", description: "Remove the copy this toolkit uses; Setup can download it again" },
-  { key: "toolkitState" as UninstallKey, label: "Toolkit settings and managed tools", description: "remove local settings, agent state, web UI state, and managed Node/Bun tools" },
+  { key: "repoSkills" as UninstallKey, label: "Local toolkit copy of Twilio Skills", description: "remove the copy this toolkit uses; Check & repair downloads it again" },
+  { key: "toolkitState" as UninstallKey, label: "Toolkit settings and managed tools", description: "remove settings, agent state, web UI state, and managed Node and Bun" },
   { key: "modelRuntime" as UninstallKey, label: "All local AI downloads", description: "remove every downloaded model, AI runtime, log, and temporary file" },
 ];
 
@@ -41,9 +41,9 @@ export function buildUninstallScreen(
     id: "uninstall-screen",
     route: "Dashboard / Uninstall",
     title: "Choose what to uninstall",
-    subtitle: "Space toggles items. Enter reviews the selection. Escape returns to dashboard.",
+    subtitle: "Choose what to remove. Nothing is removed until you confirm.",
     bodyTitle: "Choose items to remove",
-    footer: shortcutBar(["Esc", "dashboard"], ["Space", "toggle"], ["Enter", "review"]),
+    footer: shortcutBar(["Space", "toggle"], ["Enter", "review"], ["Esc", "back"]),
   });
 
   const warning = new TextRenderable(renderer, {
@@ -64,7 +64,7 @@ export function buildUninstallScreen(
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "uninstall-confirm-select",
-    height: 4,
+    height: listHeight(2),
     flexGrow: 1,
     flexShrink: 0,
     visible: false,
