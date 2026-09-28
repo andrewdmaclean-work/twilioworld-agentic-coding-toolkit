@@ -32,7 +32,7 @@ check "no opener runs without naming its destination" bash -c '! grep -rnE --exc
 
 echo "── Product boundaries ──"
 check "Docs MCP remains configured" grep -q "https://mcp.twilio.com/docs" opencode.json
-check "local AI bundle is selected by default" grep -q '"localGemma": true' toolkit.defaults.json
+check "first run downloads nothing large by default" bash -c '! grep -qE "localGemma|devPhone" toolkit.defaults.json'
 check "Execute MCP is fully removed" bash -c '! grep -rnE --exclude="*.test.ts" "Execute MCP|executeMcp|TWILIO_MCP_CREDS|twilio-execute|@twilio-alpha/mcp" README.md opencode.json toolkit.defaults.json tui/src >/dev/null'
 check "agent installers do not pipe downloads into a shell" bash -c '! grep -nE "curl.*\|[[:space:]]*(ba)?sh\b" tui/src/lib/configure-agent.ts >/dev/null'
 check "model downloads use pinned SHA-256 digests" bash -c 'grep -q "LLAMAFILE_SHA256 = \"[a-f0-9]\\{64\\}\"" tui/src/lib/constants.ts && grep -q "digestMatches" tui/src/lib/model-install.ts'

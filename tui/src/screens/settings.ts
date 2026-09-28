@@ -4,8 +4,7 @@ import { buildSubmenuScreen } from "./submenu.ts";
 export function buildSettingsScreen(
   renderer: CliRenderer,
   opts: {
-    onSetup: () => void;
-    onModelControls: () => void;
+    onRepair: () => void;
     onUninstall: () => void;
     onCancel: () => void;
   },
@@ -14,12 +13,11 @@ export function buildSettingsScreen(
     id: "settings-screen",
     route: "Dashboard / Settings",
     title: "Settings",
-    subtitle: "Install, repair, or remove toolkit features on this computer.",
+    subtitle: "Features install when you first choose them. Local AI settings live under Local chat.",
     bodyTitle: "Settings",
     options: [
-      { name: "Install or repair features", description: "restore the default AI bundle or add Dev Phone", onSelect: () => { opts.onSetup(); return false; } },
-      { name: "Manage local AI", description: "change the shared model or response effort, stop it, or free storage", onSelect: () => { opts.onModelControls(); return false; } },
-      { name: "Uninstall or reset", description: "review and remove toolkit-managed files, tools, skills, or legacy account data", onSelect: () => { opts.onUninstall(); return false; } },
+      { name: "Check & repair", description: "verify Skills, Docs, local AI, and tools; fix what's safe", onSelect: () => { opts.onRepair(); return false; } },
+      { name: "Uninstall or reset", description: "review and remove anything the toolkit installed", onSelect: () => { opts.onUninstall(); return false; } },
     ],
   }, opts.onCancel);
 }

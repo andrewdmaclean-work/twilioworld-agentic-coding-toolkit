@@ -9,7 +9,8 @@
     "dev": "bun --watch run src/index.ts",
     "test": "bun test",
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "smoke": "TOOLKIT_TUI_SMOKE=1 bun run src/index.ts"
+    "smoke": "TOOLKIT_TUI_SMOKE=1 bun run src/index.ts",
+    "preview": "bun run scripts/preview.ts"
   },
   "dependencies": {
     "@opentui/core": "0.4.2"

@@ -21,6 +21,10 @@ export function buildAgentScreen(
   onFinished: (ok?: boolean) => void,
   onCancel: () => void,
   onLaunch: (target: LaunchTarget) => void = () => {},
+  /** Pi needs a local model; when none is downloaded, the caller shows the
+   *  model-choice review instead of downloading the default silently. */
+  piNeedsModel: () => boolean = () => false,
+  onPiNeedsModel: () => void = () => {},
 ): BoxRenderable {
   const agentOptions = agentPickerOptions();
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
@@ -36,7 +40,8 @@ export function buildAgentScreen(
     id: "agent-select",
     height: agentOptions.length + 2,
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     options: agentOptions,
     ...SELECT_STYLE,
   });
@@ -48,15 +53,19 @@ export function buildAgentScreen(
     content: "",
     fg: THEME.yellow,
     visible: false,
+    width: "100%",
+    wrapMode: "word",
+    flexShrink: 0,
   });
   const confirmSelect = new SelectRenderable(renderer, {
     id: "agent-confirm-select",
     height: 4,
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     visible: false,
     options: [
-      { name: "Continue", description: "install if needed and add Twilio knowledge; you choose where it opens next" },
+      { name: "Continue", description: "install if needed and add Twilio knowledge" },
       { name: "Go back", description: "choose a different agent" },
     ],
     ...SELECT_STYLE,
@@ -74,10 +83,16 @@ export function buildAgentScreen(
   select.on(SelectRenderableEvents.ITEM_SELECTED, (_, option) => {
     if (!selectGuard.ready()) return;
     selectedAgent = option.value as string;
+    if (selectedAgent.startsWith("Pi") && piNeedsModel()) {
+      onPiNeedsModel();
+      return;
+    }
     select.visible = false;
     confirmLabel.content = selectedAgent.startsWith("Pi")
-      ? `Set up Pi? This may install Pi and download the selected local model.`
-      : `Set up ${selectedAgent}? This may install its CLI.`;
+      ? "Set up Pi? This may install Pi (npm) and copies Twilio Skills into .toolkit/pi-agent/."
+      : selectedAgent.startsWith("Other")
+        ? "Show manual setup steps? Nothing is installed."
+        : `Set up ${selectedAgent}? This may install its CLI and adds Twilio Skills to ~/.agents/skills.`;
     confirmLabel.visible = true;
     confirmSelect.visible = true;
     confirmSelect.setSelectedIndex(1);

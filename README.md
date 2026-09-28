@@ -15,17 +15,15 @@ cd twilioworld-agentic-coding-toolkit
 ./toolkit
 ```
 
-First run selects the AI bundle by default:
+The first run asks one question: what would you like to do first?
 
-- Twilio Skills and live Docs search
-- **Private local chat**, opened in the llamafile browser interface or Pi (about 2.5–3.3 GB)
+- **Set up a coding agent** (recommended) — no large download
+- **Try private local chat** — you pick the model before it downloads (about 2.5–3.3 GB)
+- **Look around first** — open the dashboard
 
-**Dev Phone** and its account-facing Twilio CLI are additional and remain
-unselected. You can deselect the local model during review and configure an
-existing coding agent without the large download.
-
-Applying the defaults installs the selected model/runtime and Pi. Opening
-**Local chat** then lets you choose the browser or terminal interface.
+Nothing large downloads up front. Local chat, Pi, Dev Phone, and the Twilio
+CLI each install the first time you choose them, after a review that says what
+will be installed and where.
 
 If anything looks wrong, run the read-only environment check:
 
@@ -52,11 +50,11 @@ Live Docs search is remote but read-only and does not require credentials.
 The main menu is ordered around common tasks:
 
 1. **Set up a coding agent** — add Twilio Skills and live Docs, then open it
-2. **Local chat** — choose the simple browser interface or Pi
+2. **Local chat** — browser interface or Pi, plus local AI settings
 3. **Dev Phone** — install or open the browser test phone
 4. **Twilio CLI** — install, sign in, switch account, or open an isolated terminal
 5. **Resources** — open TwilioWorld or Twilio AI documentation
-6. **Settings** — install or repair features, manage local AI, or uninstall/reset
+6. **Settings** — check & repair, or uninstall/reset
 
 Every action shows a summary before potentially destructive work. Long-running
 tasks have progress, detailed output, failure recovery, and retry controls.
@@ -134,7 +132,8 @@ Choose **Local chat** to open the shared model in one of two interfaces:
 - **Browser chat (llamafile)** — a simple built-in chat interface, preconfigured with live Twilio Docs search.
 - **Pi (terminal)** — a coding-focused interface with Twilio Skills and live Docs tools.
 
-Under **Settings → Manage local AI** you can:
+The first time, you choose the model before anything downloads. Under
+**Local chat → Local AI settings** you can:
 
 - choose the model shared by the browser interface and Pi;
 - disable reasoning or set its effort to Low, Medium, or High independently from whether Pi displays its reasoning blocks (browser chat only receives reasoning when effort is enabled);
@@ -202,6 +201,14 @@ cd ..
 ./test.sh --no-net
 ```
 
+To see every screen as text without a terminal (at any size):
+
+```bash
+cd tui
+bun run preview                # all screens at 100×40
+W=80 H=24 bun run preview      # the default terminal size
+```
+
 The test suite includes OpenTUI headless interaction tests, behavior tests for
 configuration and MCP output, integrity checks, TypeScript compilation,
 ShellCheck, and a TUI smoke test. See [CONTRIBUTING.md](CONTRIBUTING.md) for the
@@ -210,10 +217,11 @@ development workflow and [SECURITY.md](SECURITY.md) for reporting guidance.
 ## Troubleshooting
 
 - **The TUI will not start:** run `./toolkit doctor`.
-- **Skills are missing:** run `git submodule update --init --recursive`, then
-  apply setup again from Settings.
-- **Local AI does not start:** inspect `models/pi-server.log`, stop local AI in
-  Settings, and retry.
+- **Something seems broken:** run **Settings → Check & repair**. It downloads
+  missing Skills, refreshes installed Skills, verifies local AI checksums,
+  clears stale process records, and tells you exactly what still needs attention.
+- **Local AI does not start:** inspect `models/pi-server.log`, stop local AI
+  under **Local chat → Local AI settings**, and retry.
 - **An agent did not configure:** review the task details; the toolkit prints
   the agent-specific manual step when its CLI has no stable configuration API.
 - **A terminal window did not open:** choose **Open here**, or **Copy command**

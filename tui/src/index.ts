@@ -8,7 +8,8 @@ import { existsSync } from "fs";
 import { buildAgentScreen } from "./screens/agent.ts";
 import { buildSubmenuScreen } from "./screens/submenu.ts";
 import { buildLogScreen } from "./screens/log.ts";
-import { buildSetupScreen } from "./screens/setup.ts";
+import { buildWelcomeScreen, type WelcomeChoice } from "./screens/welcome.ts";
+import { buildLocalAiInstallScreen } from "./screens/local-ai-install.ts";
 import { buildModelControlsScreen } from "./screens/model-controls.ts";
 import { buildModelPickerScreen } from "./screens/model-picker.ts";
 import { buildSettingsScreen } from "./screens/settings.ts";
@@ -16,17 +17,21 @@ import { buildResourcesScreen } from "./screens/resources.ts";
 import { buildUninstallScreen } from "./screens/uninstall.ts";
 import { buildLocalChatScreen } from "./screens/local-chat.ts";
 import { buildHandoffScreen } from "./screens/handoff.ts";
+import { buildInstallReviewScreen, buildQuitScreen } from "./screens/prompts.ts";
 import { configureAgent } from "./lib/configure-agent.ts";
 import {
   devPhoneTarget, downloadLocalModel, installDevPhone, installTwilioCli,
   listTwilioProfiles, stopModelServer, twilioLoginTarget, twilioShellTarget, useTwilioProfile,
 } from "./lib/actions.ts";
 import { runUninstall, type UninstallKey } from "./lib/uninstall.ts";
-import { addonEnabled, modelReasoningMode, setModelReasoningMode, setThinkingVisible, thinkingVisible, type ModelReasoningMode } from "./lib/config.ts";
+import { addonEnabled, markFirstRunComplete, setLocalModelSlug, modelReasoningMode, setModelReasoningMode, setThinkingVisible, thinkingVisible, type ModelReasoningMode } from "./lib/config.ts";
 import {
   LLAMAFILE_DEST, ROOT, MODEL_SERVER_PID, MODEL_SERVER_PORT, MODEL_SERVER_URL, CONFIG_FILE,
 } from "./lib/constants.ts";
-import { getSelectedModel } from "./lib/local-models.ts";
+import { LOCAL_MODELS, getSelectedModel, localModelInstalled } from "./lib/local-models.ts";
+import { freeDiskGb } from "./lib/model-install.ts";
+import { ensureSkillsSource, runRepair, skillsSourceReady } from "./lib/setup.ts";
+import { fileExecutable } from "./lib/exec.ts";
 import { MODEL_SERVER_LOG, serverArgs, waitForModelServer } from "./lib/model.ts";
 import { capture, have, runTakeover } from "./lib/exec.ts";
 import { modelServerManaged, startDaemon, startMcpProxy } from "./lib/daemons.ts";
@@ -164,7 +169,7 @@ async function main() {
     if (!modelServerManaged()) return "";
     return [
       `Local AI is still running on 127.0.0.1:${MODEL_SERVER_PORT} (${getSelectedModel().name}).`,
-      "Stop it with ./toolkit → Settings → Manage local AI → Stop local AI.",
+      "Stop it with ./toolkit → Local chat → Local AI settings → Stop local AI.",
     ].join("\n");
   }
 
@@ -243,25 +248,13 @@ async function main() {
   function requestQuit(): void {
     if (!modelServerManaged()) { shutdown(0); return; }
     busy = true;
-    showRoute(buildSubmenuScreen(renderer, {
-      id: "quit-screen",
-      route: "Dashboard / Quit",
-      title: "Local AI is still running",
-      subtitle: `${getSelectedModel().name} is using memory and port ${MODEL_SERVER_PORT}. Escape returns to the dashboard.`,
-      bodyTitle: "Before you go",
-      options: [
-        {
-          name: "Stop local AI and quit",
-          description: "frees memory; the model starts again next time you open local chat",
-          onSelect: () => { stopModelServer(); shutdown(0); return false; },
-        },
-        {
-          name: "Quit and keep it running",
-          description: "browser chat and Pi keep working; stop it later from Settings",
-          onSelect: () => { shutdown(0); return false; },
-        },
-      ],
-    }, back), "Quit");
+    showRoute(buildQuitScreen(renderer, {
+      modelName: getSelectedModel().name,
+      port: MODEL_SERVER_PORT,
+      onStopAndQuit: () => { stopModelServer(); shutdown(0); },
+      onQuit: () => shutdown(0),
+      onCancel: back,
+    }), "Quit");
   }
 
   // ── Handoff: every program the toolkit opens goes through here ──────
@@ -334,6 +327,7 @@ async function main() {
       onDone: (ok: boolean) => void,
       onReady: (target: LaunchTarget) => void,
     ) => void | Promise<void>,
+    opts: { then?: (ok: boolean) => void } = {},
   ): void {
     busy = true;
     react("thinking");
@@ -347,6 +341,7 @@ async function main() {
       }, (target) => { ready = target; });
     }, (ok) => {
       if (ok && ready) handoff(ready);
+      else if (opts.then) { backRoute(); busy = false; refreshStatus(); opts.then(ok); }
       else back();
     }, { successAction: () => ready ? `choose where to open ${ready.label}` : undefined }), title);
   }
@@ -445,8 +440,109 @@ async function main() {
         refreshStatus();
       },
       onRemove: () => runAction("Remove local model", (onLog, onDone) => runUninstall({ keys: ["modelRuntime"] as UninstallKey[], onLog, onDone })),
+      onCancel: openLocalChat,
+    }), "Local AI settings");
+  }
+
+  // ── On-demand installs ───────────────────────────────────────────────
+  // Every feature installs the first time it's chosen, after a review that
+  // says exactly what will be installed and where.
+
+  function confirmInstall(opts: { id: string; title: string; summary: string; confirm: string; onConfirm: () => void }): void {
+    busy = true;
+    showRoute(buildInstallReviewScreen(renderer, { ...opts, onCancel: back }), opts.title);
+  }
+
+  function localAiReady(): boolean {
+    return localModelInstalled(getSelectedModel());
+  }
+
+  /** Model choice + download review, then continue into the chosen interface. */
+  function reviewLocalAi(next: "browser" | "pi"): void {
+    busy = true;
+    showRoute(buildLocalAiInstallScreen(renderer, {
+      next,
+      selectedSlug: getSelectedModel().slug,
+      installedSlugs: LOCAL_MODELS.filter(localModelInstalled).map((m) => m.slug),
+      runtimeInstalled: fileExecutable(LLAMAFILE_DEST),
+      piInstalled: have("pi"),
+      freeGb: freeDiskGb(),
+      onChoose: (model) => {
+        setLocalModelSlug(model.slug);
+        if (next === "browser") {
+          runAction(`Set up local chat — ${model.name}`, (onLog, onDone) => downloadLocalModel({ onLog, onDone }), {
+            then: (ok) => { if (ok) void startBrowserChat(); },
+          });
+        } else {
+          runAction(`Set up Pi — ${model.name}`, async (onLog, onDone, onReady) => {
+            let downloaded = false;
+            await downloadLocalModel({ onLog, onDone: (ok) => { downloaded = ok; } });
+            if (!downloaded) { onDone(false); return; }
+            await configureAgent({ agent: "Pi (lightweight TUI)", onLog, onDone, onReady });
+          });
+        }
+      },
+      onCancel: openLocalChat,
+    }), "Choose a model");
+  }
+
+  function openLocalChat(): void {
+    busy = true;
+    const modelReady = localAiReady();
+    showRoute(buildLocalChatScreen(renderer, {
+      modelReady,
+      piReady: modelReady && have("pi"),
+      running: modelServerManaged() || Boolean(latestStatus?.model.running),
+      modelName: getSelectedModel().name,
+      port: MODEL_SERVER_PORT,
+      onBrowser: () => {
+        if (localAiReady()) void startBrowserChat();
+        else reviewLocalAi("browser");
+      },
+      onPi: () => {
+        if (!localAiReady()) { reviewLocalAi("pi"); return; }
+        runAction("Set up Pi", (onLog, onDone, onReady) => configureAgent({
+          agent: "Pi (lightweight TUI)", onLog, onDone, onReady,
+        }));
+      },
+      onSettings: showModelControls,
       onCancel: back,
-    }), "Local AI model");
+    }), "Local chat");
+  }
+
+  function openAgentSetup(): void {
+    busy = true;
+    showRoute(buildAgentScreen(renderer, back, back, handoff, () => !localAiReady(), () => reviewLocalAi("pi")), "Set up a coding agent");
+  }
+
+  function openDevPhone(): void {
+    if (have("twilio") && latestStatus?.devPhone.installed) { handoff(devPhoneTarget()); return; }
+    confirmInstall({
+      id: "devphone-install",
+      title: "Install Dev Phone",
+      summary: `Installs ${have("twilio") ? "" : "the Twilio CLI and "}the Dev Phone plugin inside this repo. Your system Twilio CLI is not changed.`,
+      confirm: "Install and continue",
+      onConfirm: () => runAction("Install Dev Phone", async (onLog, onDone, onReady) => {
+        let installed = false;
+        await installDevPhone({ onLog, onDone: (ok) => { installed = ok; } });
+        if (installed) onReady(devPhoneTarget());
+        onDone(installed);
+      }),
+    });
+  }
+
+  function withTwilioCli(target: () => LaunchTarget): void {
+    if (have("twilio")) { handoff(target()); return; }
+    confirmInstall({
+      id: "cli-install",
+      title: "Install the Twilio CLI",
+      summary: "Installs the Twilio CLI inside this repo (npm). Your system Twilio CLI and its profiles are not touched.",
+      confirm: "Install and continue",
+      onConfirm: () => runAction("Install Twilio CLI", (onLog, onDone, onReady) => installTwilioCli({
+        onLog,
+        onDone: (ok) => { if (ok) onReady(target()); onDone(ok); },
+      })),
+    });
   }
 
   menuList.on(SelectRenderableEvents.ITEM_SELECTED, async (_i, opt) => {
@@ -454,7 +550,7 @@ async function main() {
     switch (opt.value as ItemId) {
       case "exit": requestQuit(); break;
 
-      case "agent": busy = true; showRoute(buildAgentScreen(renderer, back, back, handoff), "Set up a coding agent"); break;
+      case "agent": openAgentSetup(); break;
 
       case "resources": {
         busy = true;
@@ -469,40 +565,14 @@ async function main() {
       case "settings": {
         busy = true;
         showRoute(buildSettingsScreen(renderer, {
-          onSetup: () => showRoute(buildSetupScreen(renderer, back, back), "Install or repair"),
-          onModelControls: showModelControls,
+          onRepair: () => runAction("Check & repair", (onLog, onDone) => runRepair({ onLog, onDone })),
           onUninstall: () => showRoute(buildUninstallScreen(renderer, back, back), "Uninstall or reset"),
           onCancel: back,
         }), "Settings");
         break;
       }
 
-      case "localchat": {
-        busy = true;
-        showRoute(buildLocalChatScreen(renderer, {
-          modelReady: Boolean(latestStatus?.model.ready),
-          piReady: Boolean(latestStatus?.pi.installed && latestStatus.model.ready),
-          modelSize: getSelectedModel().sizeLabel,
-          onBrowser: () => {
-            if (latestStatus?.model.ready) {
-              void startBrowserChat();
-              return;
-            }
-            runAction("Install local chat", (onLog, onDone) => downloadLocalModel({
-              onLog,
-              onDone: (ok) => {
-                if (ok) void startBrowserChat();
-                onDone(ok);
-              },
-            }));
-          },
-          onPi: () => runAction("Set up Pi", (onLog, onDone, onReady) => configureAgent({
-            agent: "Pi (lightweight TUI)", onLog, onDone, onReady,
-          })),
-          onCancel: back,
-        }), "Local chat");
-        break;
-      }
+      case "localchat": openLocalChat(); break;
 
       case "devphone": {
         busy = true;
@@ -517,22 +587,8 @@ async function main() {
 	              name: doneLabel(Boolean(latestStatus?.devPhone.installed), "Open Dev Phone"),
 	              description: latestStatus?.devPhone.installed
 	                ? "installed — choose where it opens"
-	                : latestStatus?.twilio.installed
-	                  ? "Dev Phone not installed — install then open"
-	                  : "Twilio CLI and Dev Phone not installed — install then open",
-	              onSelect: () => {
-                if (!have("twilio") || !latestStatus?.devPhone.installed) {
-                  runAction("Install Dev Phone", async (onLog, onDone, onReady) => {
-                    let installed = false;
-                    await installDevPhone({ onLog, onDone: (ok) => { installed = ok; } });
-                    if (installed) onReady(devPhoneTarget());
-                    onDone(installed);
-                  });
-                  return false;
-                }
-                handoff(devPhoneTarget());
-                return false;
-              },
+	                : "review what installs, then open",
+	              onSelect: () => { openDevPhone(); return false; },
 	            },
 	            {
 	              name: "Uninstall Dev Phone",
@@ -556,42 +612,22 @@ async function main() {
             id: "cli-screen",
             route: "Dashboard / Twilio CLI",
             title: "Twilio CLI",
-            subtitle: "Terminal, login, switch account, uninstall. Escape returns to dashboard.",
+            subtitle: "Your account appears in System status once you log in. Escape returns to dashboard.",
             bodyTitle: "Twilio CLI",
             options: [
 	            {
 	              name: doneLabel(Boolean(latestStatus?.twilio.installed), "Open a terminal"),
 	              description: latestStatus?.twilio.installed
-	                ? "toolkit-local Twilio CLI installed — open an isolated terminal"
-	                : "toolkit-local Twilio CLI not installed — install then open terminal",
-	              onSelect: () => {
-                if (!have("twilio")) {
-                  runAction("Install Twilio CLI", (onLog, onDone, onReady) => installTwilioCli({
-                    onLog,
-                    onDone: (ok) => { if (ok) onReady(twilioShellTarget()); onDone(ok); },
-                  }));
-                  return false;
-                }
-                handoff(twilioShellTarget());
-                return false;
-              },
+	                ? "isolated terminal with the toolkit's Twilio CLI"
+	                : "review what installs, then open an isolated terminal",
+	              onSelect: () => { withTwilioCli(twilioShellTarget); return false; },
 	            },
 	            {
 	              name: doneLabel(Boolean(latestStatus?.twilio.sid), "Log in (add an account)"),
 	              description: latestStatus?.twilio.sid
 	                ? `logged in as ${latestStatus.twilio.profile}`
 	                : "run twilio login — choose where it opens",
-              onSelect: () => {
-                if (!have("twilio")) {
-                  runAction("Install Twilio CLI", (onLog, onDone, onReady) => installTwilioCli({
-                    onLog,
-                    onDone: (ok) => { if (ok) onReady(twilioLoginTarget()); onDone(ok); },
-                  }));
-                  return false;
-                }
-                handoff(twilioLoginTarget());
-                return false;
-              },
+              onSelect: () => { withTwilioCli(twilioLoginTarget); return false; },
             },
 	            {
 	              name: "Switch account",
@@ -627,15 +663,6 @@ async function main() {
               },
             },
 	            {
-	              name: doneLabel(Boolean(latestStatus?.twilio.sid), "Account status"),
-	              description: latestStatus?.twilio.sid ? `${latestStatus.twilio.profile} (${latestStatus.twilio.sid})` : "not logged in",
-              onSelect: () => {
-                if (!have("twilio")) { flash("⚠  Toolkit-local Twilio CLI not installed", YELLOW); return true; }
-                flash(latestStatus?.twilio.sid ? `✓  ${latestStatus.twilio.profile} — ${latestStatus.twilio.sid}` : "Not logged in — use Login", latestStatus?.twilio.sid ? GREEN : YELLOW);
-                return true;
-              },
-            },
-	            {
 	              name: "Uninstall Twilio CLI",
 	              description: latestStatus?.twilio.installed ? "remove .toolkit-local Twilio CLI + profiles" : "not installed",
               onSelect: () => {
@@ -652,7 +679,7 @@ async function main() {
     }
   });
 
-  // First run uses the same Setup flow available from Settings.
+  // First run asks one question instead of showing an install checklist.
   // Placed here — after poll/back/flash/busy are all initialized — so
   // enterDashboard()'s poll() call never hits a temporal-dead-zone binding.
   function enterDashboard(): void {
@@ -662,12 +689,32 @@ async function main() {
     menuList.focus();
   }
 
+  function finishWelcome(choice: WelcomeChoice): void {
+    markFirstRunComplete();
+    renderer.root.remove(welcome.id);
+    enterDashboard();
+    const go = () => {
+      if (choice === "agent") openAgentSetup();
+      else if (choice === "localchat") openLocalChat();
+    };
+    // Clones made without --recursive lack the Skills submodule; fetch it
+    // visibly (it's small) before continuing.
+    if (!skillsSourceReady()) {
+      runAction("Download Twilio Skills", async (onLog, onDone) => { await ensureSkillsSource({ onLog, onDone }); }, {
+        then: (ok) => { if (ok) go(); },
+      });
+    } else {
+      go();
+    }
+  }
+
+  const sizes = LOCAL_MODELS.map((m) => m.sizeBytes).sort((x, y) => x - y);
+  const welcome = buildWelcomeScreen(renderer, {
+    modelSizeRange: `${(sizes[0] / 1e9).toFixed(1)}–${(sizes[sizes.length - 1] / 1e9).toFixed(1)} GB`,
+    onChoose: finishWelcome,
+  });
   if (!existsSync(CONFIG_FILE)) {
-    const setup = buildSetupScreen(renderer, () => {
-      renderer.root.remove(setup.id);
-      enterDashboard();
-    }, () => {}, { firstRun: true });
-    renderer.root.add(setup);
+    renderer.root.add(welcome);
   } else {
     enterDashboard();
   }

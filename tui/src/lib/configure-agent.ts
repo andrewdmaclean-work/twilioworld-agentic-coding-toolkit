@@ -250,8 +250,6 @@ export async function configureAgent(opts: {
       say(`▶ Pi's private local model is not installed (~${model.sizeLabel}). Downloading it now…`, onLog);
       const installed = await installLocalModel({ model, onLog });
       if (!installed) { onDone(false); return; }
-      const config = readConfig();
-      writeConfig({ ...config.addons, localGemma: true }, config.settings);
     }
 
     // Capabilities + model server — lib/pi.ts is the one place that knows

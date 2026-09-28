@@ -70,6 +70,8 @@ export function buildHandoffScreen(renderer: CliRenderer, opts: HandoffScreenOpt
       terminal.windows.length === 0 && terminal.reason ? `New windows aren't offered here (${terminal.reason}).` : "",
     ].filter(Boolean).join("\n"),
     fg: THEME.dim2,
+    width: "100%",
+    wrapMode: "word",
   });
 
   const choices: HandoffChoice[] = [];
@@ -78,6 +80,8 @@ export function buildHandoffScreen(renderer: CliRenderer, opts: HandoffScreenOpt
     id: "handoff-result",
     content: opts.notice?.text ?? "",
     fg: opts.notice ? (opts.notice.ok ? THEME.green : THEME.danger) : THEME.silver,
+    width: "100%",
+    wrapMode: "word",
   });
   const show = (text: string, ok: boolean) => {
     result.content = text;
@@ -86,15 +90,15 @@ export function buildHandoffScreen(renderer: CliRenderer, opts: HandoffScreenOpt
 
   if (!opts.printOnly) {
     choices.push({
-      name: "Open here",
-      description: `in this ${terminal.name} window — ${target.exitHint ?? `exit ${target.label} to return to the dashboard`}`,
+      name: terminal.name === "this terminal" ? "Open here" : `Open here (this ${terminal.name} window)`,
+      description: target.exitHint ?? "returns to the dashboard when it exits",
       run: () => opts.onHere(),
     });
     for (const window of terminal.windows) {
       choices.push({
         name: windowOptionName(window),
         description: window.current
-          ? `you're running ${window.label}; the toolkit stays open here`
+          ? "the toolkit stays open here"
           : "its window may appear behind this one",
         run: async () => {
           result.content = `Opening ${window.label}…`;
@@ -124,7 +128,8 @@ export function buildHandoffScreen(renderer: CliRenderer, opts: HandoffScreenOpt
   const select = new SelectRenderable(renderer, {
     id: "handoff-select",
     height: choices.length * 2 + 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     options: choices.map((choice, i) => ({ name: choice.name, description: choice.description, value: String(i) })),
     ...SELECT_STYLE,
   });

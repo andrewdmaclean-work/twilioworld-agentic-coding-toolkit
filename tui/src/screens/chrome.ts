@@ -41,6 +41,7 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
     titleColor: THEME.red,
     paddingX: 1,
     flexDirection: "column",
+    flexShrink: 0,
     backgroundColor: THEME.panelBg,
   });
   header.add(new TextRenderable(renderer, {
@@ -58,6 +59,8 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
       id: `${opts.id}-subtitle`,
       content: opts.subtitle,
       fg: THEME.dim2,
+      width: "100%",
+      wrapMode: "word",
     }));
   }
 
@@ -78,6 +81,7 @@ export function buildRouteChrome(renderer: CliRenderer, opts: RouteChromeOptions
     id: `${opts.id}-footer`,
     content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
     fg: THEME.dim2,
+    flexShrink: 0,
   });
 
   screen.add(header);
@@ -105,6 +109,7 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     titleColor: THEME.redSoft,
     paddingX: 1,
     flexDirection: "column",
+    flexShrink: 0,
     backgroundColor: THEME.panelBg,
   });
   header.add(new TextRenderable(renderer, {
@@ -117,6 +122,8 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
       id: `${opts.id}-subtitle`,
       content: opts.subtitle,
       fg: THEME.dim2,
+      width: "100%",
+      wrapMode: "word",
     }));
   }
 
@@ -124,7 +131,9 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     id: `${opts.id}-body`,
     flexDirection: "column",
     flexGrow: 1,
+    flexShrink: 1,
     gap: 1,
+    overflow: "hidden",
     backgroundColor: THEME.panelBg,
   });
 
@@ -132,6 +141,7 @@ export function buildEmbeddedRouteChrome(renderer: CliRenderer, opts: RouteChrom
     id: `${opts.id}-footer`,
     content: opts.footer ?? shortcutBar(["Esc", "dashboard"], ["Enter", "select"]),
     fg: THEME.dim2,
+    flexShrink: 0,
   });
 
   screen.add(header);

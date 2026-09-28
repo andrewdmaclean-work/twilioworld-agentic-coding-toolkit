@@ -214,7 +214,9 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     paneTabs.visible = narrowLayout;
     menuCol.visible = !narrowLayout || compactPane === "actions";
     rightCol.visible = !narrowLayout || compactPane !== "actions";
-    statusCol.visible = !narrowLayout || compactPane === "status";
+    // A sub-screen gets the whole right column; the status box would
+    // otherwise squeeze it to nothing on an 80×24 terminal.
+    statusCol.visible = !routeScreen && (!narrowLayout || compactPane === "status");
     detailCol.visible = !narrowLayout || compactPane === "details";
     if (narrowLayout) {
       const tab = (id: CompactPane, label: string) => compactPane === id ? `[${label}]` : ` ${label} `;
@@ -263,13 +265,13 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     rightCol.width = rightW;
 
     // Status box: STATUS_ROWS lines + 2 border
-    const statusBoxH = narrowLayout ? bodyH : STATUS_ROWS + 2;
+    const statusBoxH = narrowLayout ? bodyH : routeScreen ? 0 : STATUS_ROWS + 2;
     statusCol.height = statusBoxH;
     statusCol.width  = rightW;
 
     // Detail fills remaining right col height (gained a panel's worth of
     // space by folding Installed into Status).
-    const detailH = narrowLayout ? bodyH : Math.max(4, bodyH - statusBoxH - 1);
+    const detailH = narrowLayout || routeScreen ? bodyH : Math.max(4, bodyH - statusBoxH - 1);
     detailCol.height = detailH;
     detailCol.width  = rightW;
 
@@ -375,7 +377,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     if (narrowLayout) compactPane = "details";
     detailCol.title = ` ${title} `;
     detailCol.add(screen);
-    updatePaneVisibility();
+    resize();
     if (screen.focusable) screen.focus();
   }
 
@@ -388,7 +390,7 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
     }
     setDetail(lastItems[menuList.getSelectedIndex()], lastStatus);
     if (narrowLayout) compactPane = "actions";
-    updatePaneVisibility();
+    resize();
     menuList.focus();
   }
 

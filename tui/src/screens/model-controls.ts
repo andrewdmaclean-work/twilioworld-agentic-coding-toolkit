@@ -48,8 +48,8 @@ export function buildModelControlsScreen(
 
   return buildSubmenuScreen(renderer, {
     id: "model-controls-screen",
-    route: "Dashboard / Settings / Local AI model",
-    title: "Manage local AI",
+    route: "Dashboard / Local chat / Local AI settings",
+    title: "Local AI settings",
     subtitle: "Choose how local AI runs and how much storage it uses.",
     bodyTitle: "Local AI",
     options: [

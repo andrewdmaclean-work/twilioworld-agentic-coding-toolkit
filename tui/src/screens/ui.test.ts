@@ -7,6 +7,8 @@ import { buildRobotFace } from "./robot-face.ts";
 import type { ToolkitStatus } from "../status.ts";
 import { buildDashboard } from "../dashboard.ts";
 import { buildHandoffScreen } from "./handoff.ts";
+import { buildWelcomeScreen } from "./welcome.ts";
+import { buildLocalAiInstallScreen } from "./local-ai-install.ts";
 import type { PreparedLaunch, TerminalInfo } from "../lib/terminal.ts";
 import { buildLogScreen } from "./log.ts";
 import { buildAgentScreen } from "./agent.ts";
@@ -24,10 +26,9 @@ afterEach(() => {
 test("Settings renders only configuration actions", async () => {
   const t = await createTestRenderer({ width: 80, height: 24 });
   activeRenderer = t;
-  let setupOpened = false;
+  let repairOpened = false;
   const screen = buildSettingsScreen(t.renderer, {
-    onSetup: () => { setupOpened = true; },
-    onModelControls: () => {},
+    onRepair: () => { repairOpened = true; },
     onUninstall: () => {},
     onCancel: () => {},
   });
@@ -35,15 +36,15 @@ test("Settings renders only configuration actions", async () => {
   (screen.findDescendantById("settings-screen-select") as SelectRenderable).focus();
   await t.renderOnce();
   expect(t.captureCharFrame()).toContain("Settings");
-  expect(t.captureCharFrame()).toContain("Install or repair features");
-  expect(t.captureCharFrame()).toContain("Manage local AI");
+  expect(t.captureCharFrame()).toContain("Check & repair");
+  expect(t.captureCharFrame()).not.toContain("Install or repair");
   expect(t.captureCharFrame()).toContain("Uninstall or reset");
   expect(t.captureCharFrame()).not.toContain("TwilioWorld");
 
   await Bun.sleep(250);
   t.mockInput.pressEnter();
   await t.flush();
-  expect(setupOpened).toBe(true);
+  expect(repairOpened).toBe(true);
 });
 
 test("Resources renders as a dedicated top-level route", async () => {
@@ -77,15 +78,18 @@ test("coding-agent setup requires review before installation", async () => {
   expect(frame).toContain("Go back");
 });
 
-test("local chat offers existing browser and Pi interfaces", async () => {
-  const t = await createTestRenderer({ width: 88, height: 24 });
+test("local chat owns both interfaces and its settings", async () => {
+  const t = await createTestRenderer({ width: 100, height: 26 });
   activeRenderer = t;
   const screen = buildLocalChatScreen(t.renderer, {
     modelReady: false,
     piReady: false,
-    modelSize: "3.3 GB",
+    running: false,
+    modelName: "Gemma 4 E2B",
+    port: "8080",
     onBrowser: () => {},
     onPi: () => {},
+    onSettings: () => {},
     onCancel: () => {},
   });
   t.renderer.root.add(screen);
@@ -93,7 +97,51 @@ test("local chat offers existing browser and Pi interfaces", async () => {
   const frame = t.captureCharFrame();
   expect(frame).toContain("Browser chat (llamafile)");
   expect(frame).toContain("Pi (terminal)");
-  expect(frame).toContain("downloads once (~3.3 GB)");
+  expect(frame).toContain("Local AI settings");
+  expect(frame).toContain("choose it before anything downloads");
+});
+
+test("welcome asks what to do first and downloads nothing", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const chosen: string[] = [];
+  t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", onChoose: (c) => chosen.push(c) }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("What would you like to do first?");
+  expect(frame).toContain("Set up a coding agent  (recommended)");
+  expect(frame).toContain("Try private local chat");
+  expect(frame).toContain("Look around first");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(chosen).toEqual(["agent"]);
+});
+
+test("local AI asks for the model before downloading and shows what else installs", async () => {
+  const t = await createTestRenderer({ width: 100, height: 28 });
+  activeRenderer = t;
+  const picked: string[] = [];
+  t.renderer.root.add(buildLocalAiInstallScreen(t.renderer, {
+    next: "pi",
+    selectedSlug: "phi4-mini",
+    installedSlugs: [],
+    runtimeInstalled: false,
+    piInstalled: false,
+    freeGb: 42.5,
+    onChoose: (m) => picked.push(m.slug),
+    onCancel: () => picked.push("cancel"),
+  }));
+  await t.renderOnce();
+  const frame = t.captureCharFrame();
+  expect(frame).toContain("Gemma 4 E2B  (recommended)");
+  expect(frame).toContain("Phi-4-mini");
+  expect(frame).toContain("llamafile runtime (302MB) and the Pi terminal interface");
+  expect(frame).toContain("Free disk space: 42.5 GB");
+  await Bun.sleep(250);
+  t.mockInput.pressEnter();
+  await t.flush();
+  expect(picked).toEqual(["phi4-mini"]);
 });
 
 test("reasoning visibility and effort cycle independently in place", async () => {
@@ -289,7 +337,7 @@ test("handoff names every destination and defaults to the current terminal app",
   const frame = t.captureCharFrame();
   expect(frame).toContain("Open Claude Code");
   expect(frame).toContain("First run: sign in when prompted.");
-  expect(frame).toContain("Open here");
+  expect(frame).toContain("Open here (this iTerm2 window)");
   expect(frame).toContain("Open in a new iTerm2 window");
   expect(frame).toContain("Open in Terminal (separate app)");
   expect(frame).toContain("Copy command");

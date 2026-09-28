@@ -18,7 +18,7 @@ export interface StatusLine {
 
 export function nextMove(status: ToolkitStatus | null): string {
   if (!status) return "Loading local status.";
-  if ((status.skills.count ?? 0) === 0) return "Run first-time setup to prepare Twilio knowledge.";
+  if ((status.skills.count ?? 0) === 0) return "Open Settings → Check & repair to download Twilio Skills.";
   if (!status.model.ready) return `Set up a coding agent, or add private local chat (~${getSelectedModel().sizeLabel}).`;
   return "Open local chat in your browser or Pi, or configure another coding agent.";
 }
@@ -102,8 +102,8 @@ export function detailFor(item: MenuItem | undefined, status: ToolkitStatus | nu
     case "agent":
       return [
         "OVERVIEW",
-        "  Add Twilio Skills + live Docs to the coding agent you choose, then",
-        "  open it here or in a new window. Missing agent CLIs can be installed.",
+        "  Add Twilio Skills + live Docs to the coding agent you choose,",
+        "  then open it here or in a new window. Missing CLIs install first.",
         "",
         "INCLUDED",
         "  Twilio Skills + live Docs search (no Twilio login required)",
@@ -136,9 +136,11 @@ export function detailFor(item: MenuItem | undefined, status: ToolkitStatus | nu
     case "settings":
       return [
         "SETTINGS",
-        "  Install or repair   Restore the AI bundle or add Dev Phone.",
-        "  Manage local AI     Model, reasoning visibility, effort, and storage.",
+        "  Check & repair      Verify Skills, Docs, local AI checksums, and tools.",
         "  Uninstall or reset  Review toolkit-managed data before removing it.",
+        "",
+        "  Features install when you first choose them. Local AI settings",
+        "  live under Local chat.",
       ].join("\n");
   }
 }

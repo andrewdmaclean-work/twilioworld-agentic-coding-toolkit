@@ -47,7 +47,8 @@ export function buildSubmenuScreen(
     id: `${opts.id}-select`,
     height: opts.options.length + 2,
     flexGrow: 1,
-    flexShrink: 0,
+    flexShrink: 1,
+    minHeight: 4,
     options: opts.options.map((o, i) => ({ name: o.name, description: o.description, value: String(i) })),
     ...SELECT_STYLE,
   });

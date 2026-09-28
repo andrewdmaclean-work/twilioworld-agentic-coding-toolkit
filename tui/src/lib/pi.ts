@@ -79,7 +79,7 @@ export type PiReadiness =
   | { ok: true };
 
 export function checkPiReadiness(): PiReadiness {
-  if (!localModelAvailable()) return { ok: false, reason: "Local AI is not installed. Open Settings → Install or repair features." };
+  if (!localModelAvailable()) return { ok: false, reason: "Local AI is not installed. Open Local chat to choose and download a model." };
   if (!nodeSupportsPi()) return { ok: false, reason: `Pi requires project-local Node >= 22.19.0 — node is ${piNodeVersionLabel()}. Re-run ./toolkit to repair .toolkit/toolchains/node-v22.` };
   if (!have("pi")) return { ok: false, reason: "Pi is not installed. Run Set up a coding agent." };
   return { ok: true };

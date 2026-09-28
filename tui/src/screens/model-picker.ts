@@ -27,7 +27,7 @@ export function buildModelPickerScreen(
 
   const { screen, body } = buildEmbeddedRouteChrome(renderer, {
     id: "model-picker-screen",
-    route: "Dashboard / Settings / Local AI model / Change model",
+    route: "Dashboard / Local chat / Local AI settings / Change model",
     title: "Change model",
     subtitle: "Choose which local model to use. Already-downloaded models switch instantly.",
     bodyTitle: "Available models",

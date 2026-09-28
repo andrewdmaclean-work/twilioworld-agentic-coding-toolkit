@@ -98,7 +98,7 @@ export async function sha256File(path: string): Promise<string> {
   return hash.digest("hex");
 }
 
-async function digestMatches(path: string, expected: string): Promise<boolean> {
+export async function digestMatches(path: string, expected: string): Promise<boolean> {
   try { return (await sha256File(path)) === expected.toLowerCase(); }
   catch { return false; }
 }
@@ -210,4 +210,10 @@ export async function installLocalModel(opts: {
 
   ok("Local model ready for browser chat or Pi.", onLog);
   return true;
+}
+
+/** Free space where models are stored, in GB (null when unknown). */
+export function freeDiskGb(): number | null {
+  const kb = freeKb();
+  return Number.isFinite(kb) && kb > 0 ? kb / 1_048_576 : null;
 }
