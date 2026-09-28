@@ -16,7 +16,7 @@ export function buildSettingsScreen(
     subtitle: "Features install when you first choose them. Local AI settings live under Local chat.",
     bodyTitle: "Settings",
     options: [
-      { name: "Check & repair", description: "verify Skills, Docs, local AI, and tools; fix what's safe", onSelect: () => { opts.onRepair(); return false; } },
+      { name: "Check & repair", description: "verify and fix Skills, Docs, local AI, and tools", onSelect: () => { opts.onRepair(); return false; } },
       { name: "Uninstall or reset", description: "review and remove anything the toolkit installed", onSelect: () => { opts.onUninstall(); return false; } },
     ],
   }, opts.onCancel);

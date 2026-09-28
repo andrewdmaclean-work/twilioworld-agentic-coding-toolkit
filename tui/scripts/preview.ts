@@ -10,7 +10,7 @@ import { buildWelcomeScreen } from "../src/screens/welcome.ts";
 import { buildLocalChatScreen } from "../src/screens/local-chat.ts";
 import { buildLocalAiInstallScreen } from "../src/screens/local-ai-install.ts";
 import { buildHandoffScreen } from "../src/screens/handoff.ts";
-import { buildInstallReviewScreen, buildQuitScreen } from "../src/screens/prompts.ts";
+import { buildInstallReviewScreen, buildQuitScreen, devPhoneInstallSummary } from "../src/screens/prompts.ts";
 import { buildSettingsScreen } from "../src/screens/settings.ts";
 import { buildAgentScreen } from "../src/screens/agent.ts";
 import { buildLogScreen } from "../src/screens/log.ts";
@@ -58,7 +58,7 @@ if (show("handoff")) await inDashboard("4. Where should it open? (running in iTe
 }));
 if (show("localchat")) await inDashboard("5. Local chat — first time (nothing downloaded yet)", "Local chat", (r) => buildLocalChatScreen(r, { modelReady: false, piReady: false, running: false, modelName: "Gemma 4 E2B", port: "8080", onBrowser: noop, onPi: noop, onSettings: noop, onCancel: noop }));
 if (show("model")) await inDashboard("6. Choose a model — review before download", "Choose a model", (r) => buildLocalAiInstallScreen(r, { next: "browser", selectedSlug: "gemma4-e2b", installedSlugs: [], runtimeInstalled: false, piInstalled: false, freeGb: 212.4, onChoose: noop, onCancel: noop }));
-if (show("devphone")) await inDashboard("7. Dev Phone — install review", "Install Dev Phone", (r) => buildInstallReviewScreen(r, { id: "devphone-install", title: "Install Dev Phone", summary: "Installs the Twilio CLI and the Dev Phone plugin into .toolkit/ in this repo. Your system Twilio CLI is not changed.", confirm: "Install and continue", onConfirm: noop, onCancel: noop }));
+if (show("devphone")) await inDashboard("7. Dev Phone — install review", "Install Dev Phone", (r) => buildInstallReviewScreen(r, { id: "devphone-install", title: "Install Dev Phone", summary: devPhoneInstallSummary(false), confirm: "Install and continue", onConfirm: noop, onCancel: noop }));
 if (show("settings")) await inDashboard("8. Settings", "Settings", (r) => buildSettingsScreen(r, { onRepair: noop, onUninstall: noop, onCancel: noop }));
 if (show("repair")) await inDashboard("9. Check & repair — result", "Check & repair", (r) => buildLogScreen(r, "Check & repair", async (log, done) => {
   for (const l of ["\n▶ [1/3] Twilio knowledge", "✓ 56 Twilio Skills available", "✓ Coding-agent Skills refreshed in ~/.agents/skills", "✓ Live Docs reachable (https://mcp.twilio.com/docs)", "\n▶ [2/3] Local AI", "✓ llamafile runtime verified", "✓ Gemma 4 E2B verified (selected)", "✓ Cleared a stale Docs bridge process record", "✓ Local AI is running", "\n▶ [3/3] Tools", "✓ Pi 0.80.3", "   Twilio CLI: not installed. It installs when you open the Twilio CLI or Dev Phone.", "", "✓ Check complete — 1 repaired."]) log(l, "stdout");

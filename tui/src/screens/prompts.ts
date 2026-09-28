@@ -4,6 +4,13 @@
 import { type BoxRenderable, type CliRenderer } from "@opentui/core";
 import { buildSubmenuScreen } from "./submenu.ts";
 
+export function devPhoneInstallSummary(cliInstalled: boolean): string {
+  return `Installs ${cliInstalled ? "" : "the Twilio CLI and "}the Dev Phone plugin inside this repo. Your system Twilio CLI is not changed.`;
+}
+
+export const TWILIO_CLI_INSTALL_SUMMARY =
+  "Installs the Twilio CLI inside this repo (npm). Your system Twilio CLI and its profiles are not touched.";
+
 export function buildInstallReviewScreen(
   renderer: CliRenderer,
   opts: { id: string; title: string; summary: string; confirm: string; onConfirm: () => void; onCancel: () => void },

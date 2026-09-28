@@ -17,7 +17,7 @@ import { buildResourcesScreen } from "./screens/resources.ts";
 import { buildUninstallScreen } from "./screens/uninstall.ts";
 import { buildLocalChatScreen } from "./screens/local-chat.ts";
 import { buildHandoffScreen } from "./screens/handoff.ts";
-import { buildInstallReviewScreen, buildQuitScreen } from "./screens/prompts.ts";
+import { TWILIO_CLI_INSTALL_SUMMARY, buildInstallReviewScreen, buildQuitScreen, devPhoneInstallSummary } from "./screens/prompts.ts";
 import { configureAgent } from "./lib/configure-agent.ts";
 import {
   devPhoneTarget, downloadLocalModel, installDevPhone, installTwilioCli,
@@ -520,7 +520,7 @@ async function main() {
     confirmInstall({
       id: "devphone-install",
       title: "Install Dev Phone",
-      summary: `Installs ${have("twilio") ? "" : "the Twilio CLI and "}the Dev Phone plugin inside this repo. Your system Twilio CLI is not changed.`,
+      summary: devPhoneInstallSummary(have("twilio")),
       confirm: "Install and continue",
       onConfirm: () => runAction("Install Dev Phone", async (onLog, onDone, onReady) => {
         let installed = false;
@@ -536,7 +536,7 @@ async function main() {
     confirmInstall({
       id: "cli-install",
       title: "Install the Twilio CLI",
-      summary: "Installs the Twilio CLI inside this repo (npm). Your system Twilio CLI and its profiles are not touched.",
+      summary: TWILIO_CLI_INSTALL_SUMMARY,
       confirm: "Install and continue",
       onConfirm: () => runAction("Install Twilio CLI", (onLog, onDone, onReady) => installTwilioCli({
         onLog,
