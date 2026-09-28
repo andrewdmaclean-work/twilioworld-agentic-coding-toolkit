@@ -6,11 +6,9 @@ import { buildResourcesScreen } from "./resources.ts";
 import { buildRobotFace } from "./robot-face.ts";
 import type { ToolkitStatus } from "../status.ts";
 import { buildDashboard } from "../dashboard.ts";
-import { buildHandoffScreen } from "./handoff.ts";
 import { buildWelcomeScreen } from "./welcome.ts";
 import { buildLocalAiInstallScreen } from "./local-ai-install.ts";
 import { buildAddAllReviewScreen } from "./add-all-review.ts";
-import type { PreparedLaunch, TerminalInfo } from "../lib/terminal.ts";
 import { buildLogScreen } from "./log.ts";
 import { buildAgentScreen } from "./agent.ts";
 import { buildLocalChatScreen } from "./local-chat.ts";
@@ -305,94 +303,15 @@ test("task log renders progress and a contextual completion footer", async () =>
   expect(frame).toContain("[Enter] return");
 });
 
-const prepared: PreparedLaunch = {
-  target: { id: "claude-code", label: "Claude Code", command: "claude", cwd: "/repo", hint: "sign in when prompted." },
-  scriptPath: "/repo/.toolkit/launch/claude-code.sh",
-  command: "'/repo/.toolkit/launch/claude-code.sh'",
-};
-const iterm: TerminalInfo = {
-  name: "iTerm2",
-  windows: [
-    { kind: "iterm", label: "iTerm2", current: true },
-    { kind: "apple-terminal", label: "Terminal", current: false },
-  ],
-};
-
-function handoffCallbacks() {
-  const calls: string[] = [];
-  return {
-    calls,
-    onHere: () => { calls.push("here"); },
-    onWindow: async (w: { label: string }) => { calls.push(`window:${w.label}`); return { ok: true }; },
-    onCopy: async () => { calls.push("copy"); return true; },
-    onDone: () => { calls.push("done"); },
-  };
-}
-
-test("handoff names every destination and defaults to Open here", async () => {
-  const t = await createTestRenderer({ width: 110, height: 30 });
-  activeRenderer = t;
-  const cb = handoffCallbacks();
-  t.renderer.root.add(buildHandoffScreen(t.renderer, { prepared, terminal: iterm, ...cb }));
-  await t.renderOnce();
-  const frame = t.captureCharFrame();
-  expect(frame).toContain("Open Claude Code");
-  expect(frame).toContain("First run: sign in when prompted.");
-  expect(frame).toContain("Open here (this iTerm2 window)");
-  expect(frame).toContain("Open in a new iTerm2 window");
-  expect(frame).toContain("Open in Terminal (separate app)");
-  expect(frame).toContain("Copy command");
-
-  await Bun.sleep(250);
-  t.mockInput.pressEnter();
-  await t.flush();
-  await Bun.sleep(10);
-  await t.renderOnce();
-  expect(cb.calls).toEqual(["here"]);
-});
-
-test("handoff explains why no window is offered and falls back to Open here", async () => {
-  const t = await createTestRenderer({ width: 110, height: 30 });
-  activeRenderer = t;
-  const cb = handoffCallbacks();
-  t.renderer.root.add(buildHandoffScreen(t.renderer, {
-    prepared,
-    terminal: { name: "this terminal", reason: "remote SSH session", windows: [] },
-    ...cb,
-  }));
-  await t.renderOnce();
-  expect(t.captureCharFrame()).toContain("New windows aren't offered here (remote SSH session)");
-  await Bun.sleep(250);
-  t.mockInput.pressEnter();
-  await t.flush();
-  expect(cb.calls).toEqual(["here"]);
-});
-
-test("print-only handoff copies the command and keeps it visible", async () => {
-  const t = await createTestRenderer({ width: 120, height: 30 });
-  activeRenderer = t;
-  const cb = handoffCallbacks();
-  t.renderer.root.add(buildHandoffScreen(t.renderer, { prepared, terminal: iterm, printOnly: true, ...cb }));
-  await t.renderOnce();
-  expect(t.captureCharFrame()).not.toContain("Open here");
-  await Bun.sleep(250);
-  t.mockInput.pressEnter();
-  await t.flush();
-  await Bun.sleep(10);
-  await t.renderOnce();
-  expect(cb.calls).toEqual(["copy"]);
-  expect(t.captureCharFrame()).toContain("claude-code.sh");
-});
-
 test("dashboard footer keeps the latest activity visible", async () => {
   const t = await createTestRenderer({ width: 120, height: 32 });
   activeRenderer = t;
   const dash = buildDashboard(t.renderer, () => {});
   t.renderer.root.add(dash.dashboard);
   dash.update(null);
-  dash.setActivity("Claude Code opened in iTerm2 · 14:02");
+  dash.setActivity("Claude Code closed · 14:02");
   await t.renderOnce();
-  expect(t.captureCharFrame()).toContain("● Claude Code opened in iTerm2 · 14:02");
+  expect(t.captureCharFrame()).toContain("● Claude Code closed · 14:02");
   dash.dispose();
 });
 

@@ -61,31 +61,17 @@ tasks have progress, detailed output, failure recovery, and retry controls.
 
 ### Where things open
 
-Nothing opens without telling you where. When an agent, Pi, Dev Phone, or the
-Twilio CLI is ready, the toolkit asks:
-
-- **Open here** — runs in this terminal; you return to the dashboard when it exits.
-- **Open in a new _\<app\>_ window** — offered when the toolkit can open a window
-  in the app you're using (iTerm2, Terminal, WezTerm, or a Linux terminal
-  emulator). Other apps are labeled as separate apps.
-- **Copy command** — copies a script under `.toolkit/launch/` that you can run
-  in any terminal, with the same toolkit settings.
-
-The latest thing that opened, and where, stays in the dashboard footer. Over
-SSH, new windows are never offered because they would appear on another
-display. Workshop hosts can preset one behavior for everyone:
-
-```bash
-TOOLKIT_OPEN=here ./toolkit     # always open in this terminal
-TOOLKIT_OPEN=window ./toolkit   # new window in the detected app when possible
-TOOLKIT_OPEN=print ./toolkit    # only show the command to run
-```
+Agents, Pi, Dev Phone, and the Twilio CLI open in this terminal. The dashboard
+steps aside and comes back when you exit them. Each one also gets a script under
+`.toolkit/launch/`, shown when it opens, so you can run it again from any
+terminal with the toolkit's settings. The dashboard footer shows the latest
+thing that opened or closed.
 
 ## Coding-agent setup
 
 Choose **Set up a coding agent**, review the action, and continue. The toolkit
 uses package-manager installers where available, configures Twilio knowledge,
-and then asks where to open the agent (see [Where things open](#where-things-open)).
+and then opens the agent in this terminal (see [Where things open](#where-things-open)).
 
 Already have agents installed? Choose **All my agents** (or **Add Twilio to my
 coding agents** on first run). It adds Twilio Skills and live Docs to every
@@ -190,8 +176,8 @@ removals, or run the standalone guided uninstaller:
 
 | Platform | Status |
 | --- | --- |
-| macOS arm64/x64 | Supported; new windows open in iTerm2, Terminal, or WezTerm |
-| Linux arm64/x64 | Supported; requires a compatible graphical terminal for new-window actions |
+| macOS arm64/x64 | Supported |
+| Linux arm64/x64 | Supported |
 | Windows | Native launch is not currently supported; WSL is not yet verified |
 
 Host requirements are `bash`, `git`, `curl`, and standard archive tools. The
@@ -233,11 +219,9 @@ development workflow and [SECURITY.md](SECURITY.md) for reporting guidance.
   under **Local chat → Local AI settings**, and retry.
 - **An agent did not configure:** review the task details; the toolkit prints
   the agent-specific manual step when its CLI has no stable configuration API.
-- **A terminal window did not open:** choose **Open here**, or **Copy command**
-  and run the `.toolkit/launch/…` script in any terminal. It carries the
-  toolkit's local paths and settings. If iTerm2 reports "Not authorized to send
-  Apple events", allow the toolkit's terminal under System Settings → Privacy &
-  Security → Automation.
+- **You want an agent in another window:** run its script from
+  `.toolkit/launch/` (for example `.toolkit/launch/claude-code.sh`) in any
+  terminal. It carries the toolkit's local paths and settings.
 
 Twilio Skills and Twilio MCP are Public Beta Twilio surfaces and are not covered
 by Twilio Support Terms or an SLA.

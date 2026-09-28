@@ -16,7 +16,6 @@ import { buildSettingsScreen } from "./screens/settings.ts";
 import { buildResourcesScreen } from "./screens/resources.ts";
 import { buildUninstallScreen } from "./screens/uninstall.ts";
 import { buildLocalChatScreen } from "./screens/local-chat.ts";
-import { buildHandoffScreen } from "./screens/handoff.ts";
 import { TWILIO_CLI_INSTALL_SUMMARY, buildInstallReviewScreen, buildQuitScreen, devPhoneInstallSummary } from "./screens/prompts.ts";
 import { configureAgent, selectedAgentCapabilities } from "./lib/configure-agent.ts";
 import { addTwilioToAllAgents, detectAgentPlans } from "./lib/agent-wiring.ts";
@@ -38,8 +37,7 @@ import { MODEL_SERVER_LOG, serverArgs, waitForModelServer } from "./lib/model.ts
 import { capture, have, runTakeover } from "./lib/exec.ts";
 import { modelServerManaged, startDaemon, startMcpProxy } from "./lib/daemons.ts";
 import {
-  copyToClipboard, detectTerminal, llamaWebUiDisplayUrl, openInWindow, openLlamaWebUi, openPreference, openUrl,
-  prepareLaunch, type LaunchTarget, type PreparedLaunch, type WindowTarget,
+  llamaWebUiDisplayUrl, openLlamaWebUi, openUrl, prepareLaunch, type LaunchTarget, type PreparedLaunch,
 } from "./lib/terminal.ts";
 import { prepareBrowserMcpUi, webUiStaticAssetsReady } from "./lib/webui-config.ts";
 import { pathNodeVersion, supportsPiNode } from "./lib/node-version.ts";
@@ -259,18 +257,19 @@ async function main() {
     }), "Quit");
   }
 
-  // ── Handoff: every program the toolkit opens goes through here ──────
-  // The user picks (or TOOLKIT_OPEN presets) where it opens, and the
-  // outcome stays visible in the footer afterwards.
+  // ── Opening programs ────────────────────────────────────────────────
+  // Agents, Pi, Dev Phone, and the Twilio CLI run in this terminal: the
+  // dashboard steps aside and comes back when the program exits. Nothing
+  // opens in another window where it could go unseen.
 
-  /** Run a launch script in this terminal, then come back to the dashboard. */
   function openHere(prepared: PreparedLaunch): void {
     const { target } = prepared;
     takeoverActive = true;
     renderer.suspend();
     forceTerminalRestore();
+    const exitLine = target.exitHint ?? `Exit ${target.label} to return to the dashboard`;
     process.stdout.write(`\x1b[2J\x1b[H── ${target.label} · opened from the TwilioWorld toolkit ──\n`);
-    process.stdout.write(`${target.exitHint ? target.exitHint[0].toUpperCase() + target.exitHint.slice(1) : `Exit ${target.label} to return to the dashboard`}.\n\n`);
+    process.stdout.write(`${exitLine[0].toUpperCase()}${exitLine.slice(1)}. To open it again later, run:\n  ${prepared.command}\n\n`);
     const result = runTakeover(prepared.scriptPath, []);
     renderer.resume();
     // Let any SIGINT queued during the program drain before re-arming quit.
@@ -279,49 +278,18 @@ async function main() {
     back();
   }
 
-  async function openWindow(prepared: PreparedLaunch, window: WindowTarget) {
-    const result = await openInWindow(prepared, window);
-    if (result.ok) setActivity(`${prepared.target.label} opened in ${window.label} · ${timeLabel()}`);
-    return result;
-  }
-
-  function showHandoff(prepared: PreparedLaunch, notice?: { text: string; ok: boolean }): void {
-    busy = true;
-    const terminal = detectTerminal();
-    showRoute(buildHandoffScreen(renderer, {
-      prepared,
-      terminal,
-      printOnly: openPreference() === "print",
-      notice,
-      onHere: () => openHere(prepared),
-      onWindow: (window) => openWindow(prepared, window),
-      onCopy: () => copyToClipboard(prepared.command),
-      onDone: back,
-    }), `Open ${prepared.target.label}`);
-  }
-
-  function handoff(target: LaunchTarget): void {
+  function openTarget(target: LaunchTarget): void {
     const prepared = prepareLaunch(target);
     if ("error" in prepared) {
       back();
       flash(`⚠  ${prepared.error}`, THEME.danger);
       return;
     }
-    const preference = openPreference();
-    if (preference === "here") { openHere(prepared); return; }
-    const current = detectTerminal().windows.find((w) => w.current);
-    if (preference === "window" && current) {
-      void openWindow(prepared, current).then((result) => {
-        if (result.ok) { back(); flash(`✓  ${target.label} opened in a new ${current.label} window`, GREEN); }
-        else showHandoff(prepared, { text: `✗ Could not open ${current.label}: ${result.error}`, ok: false });
-      });
-      return;
-    }
-    showHandoff(prepared);
+    openHere(prepared);
   }
 
   // Run a streaming action in a log screen route. If the action hands back
-  // something to open (onReady), Enter continues to the handoff screen.
+  // something to open (onReady), Enter opens it in this terminal.
   function runAction(
     title: string,
     run: (
@@ -342,10 +310,10 @@ async function main() {
         void poll(true);
       }, (target) => { ready = target; });
     }, (ok) => {
-      if (ok && ready) handoff(ready);
+      if (ok && ready) openTarget(ready);
       else if (opts.then) { backRoute(); busy = false; refreshStatus(); opts.then(ok); }
       else back();
-    }, { successAction: () => ready ? "choose where it opens" : undefined }), title);
+    }, { successAction: () => ready ? `open ${ready.label}` : undefined }), title);
   }
 
   async function openBrowser(url: string, label: string, shownUrl = url): Promise<void> {
@@ -517,7 +485,7 @@ async function main() {
     showRoute(buildAgentScreen(renderer, {
       onFinished: back,
       onCancel: back,
-      onLaunch: handoff,
+      onLaunch: openTarget,
       piNeedsModel: () => !localAiReady(),
       onPiNeedsModel: () => reviewLocalAi("pi"),
       detectedAgents: detectAgentPlans().map((p) => p.name),
@@ -540,7 +508,7 @@ async function main() {
   }
 
   function openDevPhone(): void {
-    if (have("twilio") && latestStatus?.devPhone.installed) { handoff(devPhoneTarget()); return; }
+    if (have("twilio") && latestStatus?.devPhone.installed) { openTarget(devPhoneTarget()); return; }
     confirmInstall({
       id: "devphone-install",
       title: "Install Dev Phone",
@@ -556,7 +524,7 @@ async function main() {
   }
 
   function withTwilioCli(target: () => LaunchTarget): void {
-    if (have("twilio")) { handoff(target()); return; }
+    if (have("twilio")) { openTarget(target()); return; }
     confirmInstall({
       id: "cli-install",
       title: "Install the Twilio CLI",

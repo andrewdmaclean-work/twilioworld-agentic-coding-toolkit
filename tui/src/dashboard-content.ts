@@ -102,8 +102,8 @@ export function detailFor(item: MenuItem | undefined, status: ToolkitStatus | nu
     case "agent":
       return [
         "OVERVIEW",
-        "  Add Twilio Skills + live Docs to the coding agent you choose,",
-        "  then open it here or in a new window. Missing CLIs install first.",
+        "  Add Twilio Skills + live Docs to all your coding agents at once,",
+        "  or install and open a specific one.",
         "",
         "INCLUDED",
         "  Twilio Skills + live Docs search (no Twilio login required)",

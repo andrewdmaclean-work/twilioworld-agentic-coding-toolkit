@@ -197,9 +197,8 @@ export function buildDashboard(renderer: CliRenderer, onQuit: () => void) {
   dashboard.add(bottomBar);
 
   let lastStatus: ToolkitStatus | null = null;
-  // Latest thing the toolkit opened or ran elsewhere ("Claude Code opened in
-  // iTerm2 · 14:02"). Stays in the footer until replaced, so an open in
-  // another window is never only a 4-second flash.
+  // Latest thing the toolkit opened or closed ("Claude Code closed · 14:02",
+  // "Browser chat: http://127.0.0.1:8080/"). Stays until replaced.
   let activity = "";
 
   function footerContent(...items: Array<[key: string, action: string]>): string {

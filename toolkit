@@ -182,13 +182,6 @@ case "${1:-}" in
     echo "  --alacritty  open in a new Alacritty window"
     echo "  --terminal   open in a new Terminal.app window"
     echo "  --doctor     check prerequisites"
-    echo
-    echo "Environment:"
-    echo "  TOOLKIT_OPEN=ask|here|window|print"
-    echo "               how agents, Pi, Dev Phone, and the Twilio CLI open."
-    echo "               ask (default) shows a choice each time; here takes over"
-    echo "               this terminal; window opens a new window in the detected"
-    echo "               terminal app; print only shows the command to run."
     exit 0
     ;;
 esac

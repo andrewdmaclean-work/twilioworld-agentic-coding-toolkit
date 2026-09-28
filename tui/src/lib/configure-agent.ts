@@ -1,17 +1,14 @@
-// lib/configure-agent.ts — agent-specific setup.
-// Drives agent-specific setup. The chosen agent string is passed in;
-// everything runs via runStreaming.
+// lib/configure-agent.ts — set up one coding agent: install it if needed,
+// add Twilio Skills + Docs (via lib/agent-wiring.ts), and hand back what to
+// open. "All my agents" lives in lib/agent-wiring.ts.
 
-import { existsSync, readFileSync } from "fs";
-import { homedir } from "os";
 import { join } from "path";
 import { capture, have, runStreaming, type LogFn } from "./exec.ts";
 import type { LaunchTarget } from "./terminal.ts";
-import { DOCS_MCP_URL, MODEL_SERVER_BASE_URL, PI_AGENT_PKG, ROOT, SKILLS_DIR } from "./constants.ts";
+import { DOCS_MCP_URL, MODEL_SERVER_BASE_URL, PI_AGENT_PKG, ROOT } from "./constants.ts";
 import { localModelAvailable, preparePi } from "./pi.ts";
-import { MODEL_CTX_SIZE } from "./model.ts";
 import { pathNodeVersion, supportsPiNode } from "./node-version.ts";
-import { readConfig, writeConfig } from "./config.ts";
+import { readConfig } from "./config.ts";
 import { installLocalModel } from "./model-install.ts";
 import { getSelectedModel } from "./local-models.ts";
 import {
@@ -78,8 +75,6 @@ interface AgentSpec {
   docsUrl: string;
   /** First-run note shown on the handoff screen (e.g. sign in / login). */
   firstRunHint: string;
-  /** Extra environment for the launched agent (e.g. config overrides). */
-  launchEnv?: (capabilities: AgentCapabilities, onLog: LogFn) => NodeJS.ProcessEnv | undefined;
   /** Wire Twilio Skills into this agent (best-effort; may just print steps). */
   wireSkills?: (onLog: LogFn) => Promise<void> | void;
   /** Wire the Docs MCP (best-effort; may just print steps). */
@@ -141,59 +136,11 @@ async function configureStandardAgent(
     label: spec.label,
     command: spec.bin,
     cwd: ROOT,
-    env: spec.launchEnv?.(capabilities, onLog),
     hint: spec.firstRunHint,
   });
   onDone(true);
 }
 
-
-// opencode.json is a tracked file, committed with sensible static defaults
-// (twilio-docs on, Gemma as the local model). This never writes to it; when
-// the user's choices differ — Docs disabled, or a different local model —
-// the difference is passed as OPENCODE_CONFIG_CONTENT (OpenCode's supported
-// "final local-scope merge" env var) in OpenCode's launch script, so local
-// machine state never lands in a tracked file and nothing needs exporting.
-export function opencodeOverride(
-  committed: { mcp?: Record<string, { enabled?: boolean }>; provider?: { llamafile?: { models?: Record<string, unknown> } } },
-  docsEnabled: boolean,
-  model: { slug: string; name: string },
-  ctxSize = Number(MODEL_CTX_SIZE),
-): Record<string, unknown> | null {
-  const override: Record<string, unknown> = {};
-  const mcpDrift = (committed.mcp?.["twilio-docs"]?.enabled ?? false) !== docsEnabled;
-  if (mcpDrift) override.mcp = { "twilio-docs": { enabled: docsEnabled } };
-  if (!committed.provider?.llamafile?.models?.[model.slug]) {
-    override.provider = {
-      llamafile: {
-        name: `${model.name} (local)`,
-        models: { [model.slug]: { name: `${model.name} (local)`, limit: { context: ctxSize, output: 4096 }, tools: true } },
-      },
-    };
-  }
-  return Object.keys(override).length ? { $schema: "https://opencode.ai/config.json", ...override } : null;
-}
-
-function opencodeLaunchEnv(docsEnabled: boolean, onLog: LogFn): NodeJS.ProcessEnv | undefined {
-  const ocJson = join(ROOT, "opencode.json");
-  if (!existsSync(ocJson)) { warn("opencode.json not found — skipping MCP check", onLog); return undefined; }
-
-  let committed: Parameters<typeof opencodeOverride>[0] = {};
-  try {
-    committed = JSON.parse(readFileSync(ocJson, "utf8"));
-  } catch (e) {
-    warn(`Could not read opencode.json: ${e}`, onLog);
-    return undefined;
-  }
-
-  const override = opencodeOverride(committed, docsEnabled, getSelectedModel());
-  if (!override) {
-    ok("opencode.json already matches your selected choices", onLog);
-    return undefined;
-  }
-  ok("Your choices differ from opencode.json's committed defaults — applied at launch via OPENCODE_CONFIG_CONTENT (opencode.json is never modified)", onLog);
-  return { OPENCODE_CONFIG_CONTENT: JSON.stringify(override) };
-}
 
 export async function configureAgent(opts: {
   agent: string;
@@ -255,7 +202,6 @@ export async function configureAgent(opts: {
         firstRunHint: "run /connect to pick a model (Anthropic, OpenAI, or Zen).",
         wireSkills: (l) => ok("OpenCode reads Twilio Skills from ~/.agents/skills", l),
         wireDocsMcp: async (l) => { await opencodeDocs(l); },
-        launchEnv: (selected, l) => opencodeLaunchEnv(selected.docs, l),
       },
       capabilities, onLog, onDone, onReady,
     );

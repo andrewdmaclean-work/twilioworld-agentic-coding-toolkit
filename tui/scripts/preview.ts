@@ -9,7 +9,6 @@ import { buildDashboard } from "../src/dashboard.ts";
 import { buildWelcomeScreen } from "../src/screens/welcome.ts";
 import { buildLocalChatScreen } from "../src/screens/local-chat.ts";
 import { buildLocalAiInstallScreen } from "../src/screens/local-ai-install.ts";
-import { buildHandoffScreen } from "../src/screens/handoff.ts";
 import { buildInstallReviewScreen, buildQuitScreen, devPhoneInstallSummary } from "../src/screens/prompts.ts";
 import { buildSettingsScreen } from "../src/screens/settings.ts";
 import { buildAgentScreen } from "../src/screens/agent.ts";
@@ -49,13 +48,8 @@ const which = process.argv[2] ?? "all";
 const show = (k: string) => which === "all" || which.split(",").includes(k);
 
 if (show("welcome")) await frame("1. First run — welcome", (t) => { t.renderer.root.add(buildWelcomeScreen(t.renderer, { modelSizeRange: "2.5–3.3 GB", onChoose: noop })); });
-if (show("dashboard")) await inDashboard("2. Dashboard — footer keeps the latest activity", "", () => null, "Claude Code opened in iTerm2 · 14:02");
+if (show("dashboard")) await inDashboard("2. Dashboard — footer keeps the latest activity", "", () => null, "Claude Code closed · 14:02");
 if (show("agent")) await inDashboard("3. Set up a coding agent — review", "Set up a coding agent", (r) => buildAgentScreen(r, { onFinished: noop, onCancel: noop }), "", async (t) => { await Bun.sleep(250); t.mockInput.pressEnter(); await t.flush(); });
-if (show("handoff")) await inDashboard("4. Where should it open? (running in iTerm2)", "Open Claude Code", (r) => buildHandoffScreen(r, {
-  prepared: { target: { id: "claude-code", label: "Claude Code", command: "claude", cwd: "/repo", hint: "sign in when prompted." }, scriptPath: "/Users/andrewmaclean/GitHub/twilioworld-agentic-coding-toolkit/.toolkit/launch/claude-code.sh", command: "'…/claude-code.sh'" },
-  terminal: { name: "iTerm2", windows: [{ kind: "iterm", label: "iTerm2", current: true }, { kind: "apple-terminal", label: "Terminal", current: false }] },
-  onHere: noop, onWindow: async () => ({ ok: true }), onCopy: async () => true, onDone: noop,
-}));
 if (show("localchat")) await inDashboard("5. Local chat — first time (nothing downloaded yet)", "Local chat", (r) => buildLocalChatScreen(r, { modelReady: false, piReady: false, running: false, modelName: "Gemma 4 E2B", port: "8080", onBrowser: noop, onPi: noop, onSettings: noop, onCancel: noop }));
 if (show("model")) await inDashboard("6. Choose a model — review before download", "Choose a model", (r) => buildLocalAiInstallScreen(r, { next: "browser", selectedSlug: "gemma4-e2b", installedSlugs: [], runtimeInstalled: false, piInstalled: false, freeGb: 212.4, onChoose: noop, onCancel: noop }));
 if (show("devphone")) await inDashboard("7. Dev Phone — install review", "Install Dev Phone", (r) => buildInstallReviewScreen(r, { id: "devphone-install", title: "Install Dev Phone", summary: devPhoneInstallSummary(false), confirm: "Install and continue", onConfirm: noop, onCancel: noop }));

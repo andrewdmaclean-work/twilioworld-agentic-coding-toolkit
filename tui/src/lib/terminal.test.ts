@@ -3,53 +3,8 @@ import { spawnSync } from "child_process";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
-import { detectTerminal, envExportLines, launchScriptContent, openPreference } from "./terminal.ts";
+import { envExportLines, launchScriptContent } from "./terminal.ts";
 import { shCmd } from "./exec.ts";
-
-const none = () => false;
-
-test("iTerm2 offers a new iTerm2 window first and Terminal as a named separate app", () => {
-  const info = detectTerminal({ TERM_PROGRAM: "iTerm.app" }, "darwin", none);
-  expect(info.name).toBe("iTerm2");
-  expect(info.windows.map((w) => [w.kind, w.current])).toEqual([["iterm", true], ["apple-terminal", false]]);
-});
-
-test("Terminal.app is the current app when running in it", () => {
-  const info = detectTerminal({ TERM_PROGRAM: "Apple_Terminal" }, "darwin", none);
-  expect(info.windows).toEqual([{ kind: "apple-terminal", label: "Terminal", current: true }]);
-});
-
-test("terminals without a reliable window API never get a 'current' window option", () => {
-  for (const program of ["ghostty", "vscode", "WarpTerminal"]) {
-    const info = detectTerminal({ TERM_PROGRAM: program }, "darwin", none);
-    expect(info.windows.some((w) => w.current)).toBe(false);
-  }
-});
-
-test("SSH sessions offer no windows, since they would open on another display", () => {
-  const info = detectTerminal({ TERM_PROGRAM: "iTerm.app", SSH_CONNECTION: "1.2.3.4 1 5.6.7.8 22" }, "darwin", () => true);
-  expect(info.windows).toEqual([]);
-  expect(info.reason).toContain("SSH");
-});
-
-test("Linux without a display offers no windows and says why", () => {
-  const info = detectTerminal({}, "linux", () => true);
-  expect(info.windows).toEqual([]);
-  expect(info.reason).toBe("no graphical display");
-});
-
-test("Linux with a display names the terminal emulator it will use", () => {
-  const info = detectTerminal({ DISPLAY: ":0" }, "linux", (bin) => bin === "konsole");
-  expect(info.windows).toEqual([{ kind: "linux", label: "konsole", current: false, bin: "konsole" }]);
-});
-
-test("TOOLKIT_OPEN accepts only known modes", () => {
-  expect(openPreference({})).toBe("ask");
-  expect(openPreference({ TOOLKIT_OPEN: "HERE" })).toBe("here");
-  expect(openPreference({ TOOLKIT_OPEN: "window" })).toBe("window");
-  expect(openPreference({ TOOLKIT_OPEN: "print" })).toBe("print");
-  expect(openPreference({ TOOLKIT_OPEN: "bogus" })).toBe("ask");
-});
 
 test("env exports always include PATH, only changed vars, and skip unsafe names", () => {
   const lines = envExportLines(
