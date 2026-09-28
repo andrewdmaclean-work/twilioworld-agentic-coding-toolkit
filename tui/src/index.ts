@@ -710,9 +710,18 @@ async function main() {
     enterDashboard();
   }
 
+  // Ctrl+C tears the renderer down directly (exitOnCtrlC), skipping
+  // shutdown(). Run the same cleanup here so no timer draws into destroyed
+  // widgets, and the local-AI reminder still prints.
   renderer.on("destroy", () => {
     if (interval) clearInterval(interval);
+    disposeDashboard();
     forceTerminalRestore();
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const note = localAiStillRunningNote();
+    if (note) console.log(note);
+    setTimeout(() => process.exit(0), 0);
   });
 }
 

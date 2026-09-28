@@ -352,3 +352,18 @@ test("add-all review lists what is written for each agent", async () => {
   await t.flush();
   expect(confirmed).toBe(true);
 });
+
+test("a disposed robot never draws after teardown", async () => {
+  const t = await createTestRenderer({ width: 40, height: 10 });
+  const robot = buildRobotFace(t.renderer);
+  t.renderer.root.add(robot.container);
+  await t.renderOnce();
+  const errors: unknown[] = [];
+  const onError = (e: unknown) => { errors.push(e); };
+  process.on("uncaughtException", onError);
+  robot.dispose();
+  t.renderer.destroy();
+  await Bun.sleep(1200);
+  process.off("uncaughtException", onError);
+  expect(errors).toEqual([]);
+});

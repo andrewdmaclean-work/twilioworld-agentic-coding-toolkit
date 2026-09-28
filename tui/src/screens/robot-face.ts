@@ -124,8 +124,10 @@ export function buildRobotFace(renderer: CliRenderer): RobotFace {
   let phase = 0;
   let mode: RobotMode = "full";
 
+  let disposed = false;
+
   function render(): void {
-    if (mode === "hidden") return;
+    if (disposed || mode === "hidden") return;
     if (currentReaction && Date.now() >= reactionUntil) currentReaction = null;
     const next = mode === "compact"
       ? compactFrame(currentStatus, phase, currentReaction)
@@ -159,6 +161,7 @@ export function buildRobotFace(renderer: CliRenderer): RobotFace {
       if (mode !== "hidden") render();
     },
     dispose() {
+      disposed = true;
       clearInterval(interval);
     },
   };
